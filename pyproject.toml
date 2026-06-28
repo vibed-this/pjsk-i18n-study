@@ -6,3 +6,6 @@ requires-python = ">=3.12"
 dependencies = [
     "frida==17.10.1",
 ]
+
+[tool.uv.workspace]
+members = ["i18n-tools"]

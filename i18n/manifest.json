@@ -1,0 +1,17 @@
+{
+  "built_at": "2026-06-28T15:46:43+00:00",
+  "locale": "zh-Hans",
+  "target_client": "jp",
+  "sources": {
+    "cn_wordings_url": "https://sekai-world.github.io/sekai-master-db-cn-diff/wordings.json",
+    "jp_wordings_url": "https://sekai-world.github.io/sekai-master-db-diff/wordings.json",
+    "cn_cache_sha256": "d7a725669ce372a56a49388b980ff80c6fc01198f1213464f48974a206e94362",
+    "jp_cache_sha256": "be944a4c5ab59a4dff9ec1649c81903e46a82b023c059747c9f48205c8359f44"
+  },
+  "outputs": {
+    "ui_wordings": "i18n/ui/wordings.json",
+    "ui_wordings_sha256": "a0b552101eaaa5077662090dcc4f3d3ee3c30bc8065b3cffabf49d1a55be4ec3",
+    "entry_count": 4838
+  },
+  "notes": "Runtime lookup: wordingKey → zh for WordingManager.Get on JP client"
+}

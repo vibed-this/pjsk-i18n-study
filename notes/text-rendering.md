@@ -244,6 +244,89 @@ flowchart TD
 | 离线数据源 | 全量：`sekai-master-db-diff` 或解密 Master 缓存；启动文案：解包 `112b24b5…` 内置词表（196 条） |
 | 翻译接入点 | 在 `WordingManager.Get` 或 `TMP_Text.set_text` 用 `key → 中文` 替换；剧情走 `SetWordsInfo` 独立映射 |
 
+---
+
+## 翻译数据管线与国服词表（2026-06-28）
+
+### 分析目标
+
+评估汉化 Mod 的数据存储形态，以及能否直接复用国服（简中）官方译文。
+
+### 手段
+
+- Sekai-World 多区 Master diff：`sekai-master-db-diff`（日）、`sekai-master-db-cn-diff`（简中国服）
+- 在线 JSON：`https://sekai-world.github.io/sekai-master-db-{cn-,}diff/wordings.json`
+- JP/CN `wordingKey` 交集统计；与 Frida 已观测 key 交叉核对
+- `sekai-assets-updater` 文档（支持 `REGION: CN` 拉取剧情 AssetBundle）
+
+### 过程
+
+**1. 国服词表可直接作 UI 主数据源**
+
+CN diff 与日服 diff **同一 schema**：`{ wordingKey, value }`。2026-06-28 快照统计：
+
+| 指标 | 日服 JP | 国服 CN |
+|------|---------|---------|
+| 条数 | 3519 | 4838 |
+| key 交集 | — | **3213** |
+| 仅日服有 | 306 | — |
+| 仅国服有 | — | 1625（防沉迷 `AntiAddiction_*`、Nuverse 合规文案等） |
+
+已验证 Frida 样本在 CN 库均有对应译文：
+
+| key | 日服 value | 国服 value |
+|-----|------------|------------|
+| `WORD_DECIDE` | 決定 | 确定 |
+| `WORD_CANCEL` | キャンセル | 取消 |
+| `MSG_LIVE_SKIP_BODY` | ライブをスキップしますか？ | 是否跳过演出？ |
+
+**2. 不能「整包照搬」的缺口**
+
+| 缺口 | 说明 |
+|------|------|
+| `MSG_STARTAPP_*` | JP/CN 公开 diff **均缺失**；日文来自 APK 内置 196 条（§5）；国服需解包国服 APK 内置词表或手翻 |
+| 日服独有 306 key | 日服客户端仍会 lookup，CN diff 无条目 → 需 fallback（留日文 / 社区补翻） |
+| 版本不同步 | 国服、日服活动与 Master 更新节奏不同；diff 快照须与目标 `versionName` 对齐 |
+| `GetFormat` 占位符 | CN 库约 521 条含 `{0}`、约 25 条含 `%s`/`%d`；约 207 条含 TMP 富文本标签；替换时须原样保留占位符与标签 |
+| 剧情明文 | **不走 `wordingKey`**；`SetWordsInfo` 直接给角色名+正文；CN diff 的 `wordings.json` **不覆盖剧情** |
+
+**3. 剧情译文来源（独立于 wordings）**
+
+- 日服剧情素材：sekai.best / `sekai-assets-updater`（`REGION: JP`）解出的 scenario / unitystory JSON
+- 国服剧情：`sekai-assets-updater` 设 `REGION: CN`（README 支持 CN/TW/KR/EN），拉取国服 AssetBundle 后提取 scenario JSON
+- 对齐方式：按剧情资源 ID / scenario 结构字段（非 `wordingKey`）建立 `lineId` 或「原文 hash → 中文」表；日服与国服剧情版本可能不一致，需按章节版本绑定
+
+**4. 推荐 Mod 翻译包结构（草案）**
+
+```
+i18n/
+├── manifest.json          # gameVersion, cn_diff_rev, checksum, locale=zh-Hans
+├── ui/
+│   └── wordings.json      # wordingKey → zh（主表，来源 CN diff）
+├── ui/
+│   └── overrides.json     # 日服独有 key、MSG_STARTAPP_* 等补丁
+├── fmt/                   # 可选：GetFormat 专用，校验 {0}/%s 与原文一致
+└── story/
+    └── *.json             # episode/scenarioId → [{jp, zh, speaker?}]
+```
+
+运行时 lookup：
+
+| Hook 点 | 查表键 | 数据源 |
+|---------|--------|--------|
+| `WordingManager.Get` / `GetFormat` | `wordingKey` | `ui/wordings.json` + overrides |
+| `SetWordingText`（monitor） | key | 同上 |
+| `TalkWindow.SetWordsInfo` | 正文 hash 或 scenario lineId | `story/*.json` |
+
+热更新：整包替换 `i18n/` 目录 + `manifest.json` 版本校验（TODO P3 待细化）。
+
+### 结论
+
+- **UI 词表：可以且应该优先用国服 CN diff**（`sekai-master-db-cn-diff`），按 `wordingKey` 直接 lookup，工程成本最低、译文为官方简中。
+- **不能指望 CN diff  alone**：内置 196 条、日服独有 key、剧情明文须另管线；版本须与日服客户端对齐并做缺失检测。
+- **剧情**：需 `sekai-assets-updater` `REGION=CN` 或等价国服 scenario 提取，与 UI 词表分开存储。
+- **合规**：国服译文属官方资产，Mod 分发时需自行评估版权与使用范围（技术可行 ≠ 可随意再分发）。
+
 ## 相关笔记
 
 - Hook 方案：[hook-strategy.md](./hook-strategy.md)

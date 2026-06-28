@@ -7,8 +7,13 @@ const DEMO_ZH = {
     'わたしは、初音ミク。\nキミの名前は？': '我是初音未来。你的名字是？',
 };
 
+function uiWordingsMap() {
+    return (typeof UI_WORDINGS !== 'undefined' && UI_WORDINGS) ? UI_WORDINGS : {};
+}
+
 const CFG = Object.assign({
     PREFIX: '[TEST] ',
+    UI_MODE: 'prefix',  // 'cn' | 'prefix' — run.py sets 'cn' when wordings.json loaded
     STORY_MODE: 'prefix',   // 'prefix' | 'dual'
     DUAL_STYLE: 'plain',    // 'plain' | 'rich'
     DUAL_PLACEHOLDER: '译',
@@ -82,6 +87,7 @@ function applyStoryDual(jp) {
 
 function prefixEnterArg(args, index, hookName, statBump) {
     if (statBump) statBump();
+    if (CFG.UI_MODE === 'cn') return;
     if (CFG.STORY_MODE === 'dual') return;
     const orig = readStr(args[index]);
     if (!orig) return;
@@ -92,11 +98,32 @@ function prefixEnterArg(args, index, hookName, statBump) {
     if (stats.intercept < CFG.MAX_LOG) logIntercept(hookName, orig, next, hit.ok);
 }
 
-function prefixLeaveRetval(retval, hookName, statBump) {
+function lookupUiZh(key) {
+    if (!key) return null;
+    const map = uiWordingsMap();
+    if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+    return null;
+}
+
+function replaceRetvalZh(retval, zh, hookName, orig) {
+    const hit = replaceArg(retval, zh);
+    if (hit.ok) retval.replace(hit.ptr);
+    if (stats.intercept < CFG.MAX_LOG) logIntercept(hookName, orig, zh, hit.ok, 'mode=cn');
+    return hit.ok;
+}
+
+function prefixLeaveRetval(retval, hookName, statBump, key) {
     if (statBump) statBump();
     if (CFG.STORY_MODE === 'dual') return;
     const orig = readStr(retval);
     if (!orig) return;
+    if (CFG.UI_MODE === 'cn' && key) {
+        const zh = lookupUiZh(key);
+        if (zh) {
+            replaceRetvalZh(retval, zh, hookName, orig);
+            return;
+        }
+    }
     if (shouldSkipPrefix(orig)) { stats.skip++; return; }
     const next = prefixed(orig);
     const hit = replaceArg(retval, next);
@@ -198,13 +225,19 @@ function install() {
             },
         });
         hookAt('WordingManager.Get', OFFSETS.WordingManager_GetImpl, {
+            onEnter(args) {
+                this.key = readStr(args[0]);
+            },
             onLeave(retval) {
-                prefixLeaveRetval(retval, 'WordingManager.Get', () => { stats.wordingGet++; });
+                prefixLeaveRetval(retval, 'WordingManager.Get', () => { stats.wordingGet++; }, this.key);
             },
         });
         hookAt('WordingManager.GetFormat', OFFSETS.WordingManager_GetFormat, {
+            onEnter(args) {
+                this.key = readStr(args[0]);
+            },
             onLeave(retval) {
-                prefixLeaveRetval(retval, 'WordingManager.GetFormat', () => { stats.wordingFmt++; });
+                prefixLeaveRetval(retval, 'WordingManager.GetFormat', () => { stats.wordingFmt++; }, this.key);
             },
         });
         hookAt('CustomTextMesh.UpdateWordingText', OFFSETS.CustomTextMesh_UpdateWordingText, {
@@ -224,10 +257,12 @@ function install() {
     emit('ready', {
         mode: 'intercept',
         storyMode: CFG.STORY_MODE,
+        uiMode: CFG.UI_MODE,
         dualStyle: CFG.DUAL_STYLE,
         prefix: CFG.PREFIX,
         intercept: CFG.INTERCEPT,
         demoKeys: Object.keys(DEMO_ZH).length,
+        uiWordings: Object.keys(uiWordingsMap()).length,
         stats: stats,
     });
 }

@@ -1,4 +1,5 @@
 // Hook offsets — IDA function entry (see notes/ida-verification.md)
+// Game version: 6.5.5 (device TB322FC; confirm local apk/ versionName on update)
 'use strict';
 
 const MODULE = 'libil2cpp.so';

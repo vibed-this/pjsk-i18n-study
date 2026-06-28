@@ -21,10 +21,21 @@ import frida
 from device import PACKAGE, get_device
 
 ROOT = Path(__file__).resolve().parent
+REPO_ROOT = ROOT.parent
 LIB = ROOT / "lib"
 SCRIPTS = ROOT / "scripts"
+UI_WORDINGS_PATH = REPO_ROOT / "i18n" / "ui" / "wordings.json"
 
 MODES = ("intercept", "monitor", "probe")
+
+
+def load_ui_wordings() -> dict[str, str] | None:
+    if not UI_WORDINGS_PATH.is_file():
+        return None
+    data = json.loads(UI_WORDINGS_PATH.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"expected object in {UI_WORDINGS_PATH}")
+    return {str(k): str(v) for k, v in data.items()}
 
 
 def load_script(mode: str, cfg_override: dict | None = None) -> str:
@@ -32,6 +43,9 @@ def load_script(mode: str, cfg_override: dict | None = None) -> str:
         (LIB / "offsets.js").read_text(encoding="utf-8"),
         (LIB / "runtime.js").read_text(encoding="utf-8"),
     ]
+    wordings = load_ui_wordings()
+    if wordings:
+        parts.append(f"const UI_WORDINGS = {json.dumps(wordings, ensure_ascii=False)};\n")
     if cfg_override:
         parts.append(f"const CFG_OVERRIDE = {json.dumps(cfg_override, ensure_ascii=False)};\n")
     parts.append((SCRIPTS / f"{mode}.js").read_text(encoding="utf-8"))
@@ -45,7 +59,11 @@ def intercept_cfg(args: argparse.Namespace) -> dict:
             "DUAL_STYLE": args.dual_style,
             "INTERCEPT": {"TMP": False, "STORY": True, "UI": False},
         }
-    return {"STORY_MODE": "prefix", "PREFIX": args.prefix}
+    ui_mode = "cn" if load_ui_wordings() else "prefix"
+    cfg: dict = {"STORY_MODE": "prefix", "UI_MODE": ui_mode}
+    if ui_mode == "prefix":
+        cfg["PREFIX"] = args.prefix
+    return cfg
 
 
 def attach(device: frida.core.Device, use_attach: bool) -> tuple[frida.core.Session, int | None]:
@@ -124,8 +142,8 @@ def run_intercept(args: argparse.Namespace) -> int:
             print(f"[stats] {p.get('stats')}", flush=True)
         elif ev == "ready":
             print(
-                f"[*] ready storyMode={p.get('storyMode')!r} "
-                f"dualStyle={p.get('dualStyle')!r} demoKeys={p.get('demoKeys')}",
+                f"[*] ready storyMode={p.get('storyMode')!r} uiMode={p.get('uiMode')!r} "
+                f"uiWordings={p.get('uiWordings')} demoKeys={p.get('demoKeys')}",
                 flush=True,
             )
         elif ev in ("hook", "il2cpp", "error"):
@@ -136,7 +154,11 @@ def run_intercept(args: argparse.Namespace) -> int:
         if args.story_mode == "dual":
             print("剧情双字幕 — 上行中文（demo 词表）、下行原文；仅 Hook SetWordsInfo", flush=True)
         else:
-            print("拦截演示 — 屏幕应出现前缀，终端同步打印", flush=True)
+            w = load_ui_wordings()
+            if w:
+                print(f"UI 国服词表 — {len(w)} keys；WordingManager.Get 按 key 替换", flush=True)
+            else:
+                print("拦截演示 — 屏幕应出现前缀，终端同步打印（未找到 i18n/ui/wordings.json）", flush=True)
         print("=" * 60, flush=True)
 
     device = get_device()

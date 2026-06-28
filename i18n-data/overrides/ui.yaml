@@ -1,0 +1,7 @@
+# Manual patches only (CN diff gaps, JP-only keys, wording fixes).
+# String value  →  wordingKey: "中文"
+# Object form   →  KEY: { zh: "中文", note: "..." }
+#
+# MSG_STARTAPP_* 不在公开 diff；国服内置词表解包后可补在此。
+#
+# _meta: reserved for tooling comments

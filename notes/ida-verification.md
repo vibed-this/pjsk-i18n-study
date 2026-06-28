@@ -98,7 +98,20 @@ ARM64 参数：
 - 4 个核心 Hook 候选在二进制中**均为有效函数**，无额外混淆导致入口不可识别。
 - RVA 与 IDA 入口的偏差（`0x50`~`0xF0`）属 IL2CPP codegen 正常现象，**Hook 地址以 IDA 函数入口为准**。
 - IDA 中已重命名 8 个关键函数并保存至 `.i64`。
-- **动态验证**（见 [frida.md](./frida.md)）：真机运行时 `base + 偏移` 与 `Interceptor.attach` 结果一致，其中 `WordingManager.Get`、`CustomTextMesh.SetText`、`TalkWindow.SetWordsInfo` 三处已在真机成功安装 Hook。
+- **动态验证**（见 [frida.md](./frida.md)）：真机运行时 `base + 偏移` 与 `Interceptor.attach` 结果一致；`TalkWindow.SetWordsInfo`、`WordingManager.GetImpl`、`CustomTextMesh.SetText` 等已在真机成功安装 Hook。
+
+### `methodPointer`（运行时解析）与 IDA 入口
+
+Il2CppDumper `script.json` 的 `Address` 与 `il2cpp_class_get_method_from_name` 返回的 `MethodInfo::methodPointer` **同源**（metadata 登记值），**不一定等于** IDA 识别的最佳 Hook 入口：
+
+| 方法 | Dumper / `methodPointer` | IDA 入口 | 备注 |
+|------|--------------------------|----------|------|
+| `WordingManager.Get` | `0x60242AC` | `0x60241BC`（包装器） | UI intercept 实际 Hook **实现体 `0x60282AC`**，非本表包装器 |
+| `CustomTextMesh.SetText` | `0x4F27590` | `0x4F27530` | codegen 前缀 |
+| `TalkWindow.SetWordsInfo` | `0x6264FD8` | `0x6264FD8` | 完全一致，适合作运行时 resolve 锚点 |
+| `TMP_Text.set_text` | `0xA8D1BE8` | `0xA8D1B98` | codegen 前缀 |
+
+Zygisk 若采用运行时 `il2cpp_*` 解析，须与 [hook-strategy.md](./hook-strategy.md)「运行时 IL2CPP 解析」章节的混合策略配合，不可 blindly Hook `methodPointer`。
 
 ## 相关笔记
 

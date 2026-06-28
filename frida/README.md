@@ -39,6 +39,10 @@ uv run python frida/run.py monitor --duration 90
 # 验证 il2cpp 与偏移（spawn 模式）
 uv run python frida/run.py probe
 
+# UI 国服词表（需先构建 i18n 包）
+uv run --project i18n-tools pjsk-i18n build
+uv run python frida/run.py intercept
+
 # 自定义前缀
 uv run python frida/run.py intercept --prefix "[CN] " --duration 120
 ```

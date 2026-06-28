@@ -48,7 +48,16 @@ APK 解包 → sssekai 解密 metadata → Il2CppDumper → IDA 验证 Hook 点 
 
 ## 结论
 
-静态分析 + IDA 验证 + Frida 真机原型已打通。当前阻塞项：Hex-Rays、模拟器动态环境、文本字符串抓取完善、Zygisk 封装。产物体积极大，已通过 `.gitignore` 排除出版本控制。
+静态分析 + IDA 验证 + Frida 真机原型已打通。当前阻塞项：Hex-Rays、模拟器动态环境、Zygisk 封装。产物体积极大，已通过 `.gitignore` 排除出版本控制。
+
+### 偏移与游戏版本绑定
+
+| 项 | 值 / 说明 |
+|----|-----------|
+| Hook RVA 配置 | `frida/lib/offsets.js`（IDA 入口，非运行时 base） |
+| 当前分析版本 | 真机曾装 **6.5.5**；本地 `apk/` versionName **待确认** |
+| 版本不一致风险 | 设备 APK ≠ 本地分析 so → Hook 可能装得上但行为错误；见 `frida/gadget/README.md` |
+| 更新后流程 | Il2CppDumper → IDA → 更新 `offsets.js` → `probe` + E2E（详见 [hook-strategy.md](./hook-strategy.md) §版本更新） |
 
 ## 产物索引
 

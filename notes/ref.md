@@ -55,6 +55,12 @@
 
 **工具 / 社区站点**
 
+- https://github.com/Sekai-World/sekai-master-db-diff — 日服 Master diff
+- https://github.com/Sekai-World/sekai-master-db-cn-diff — 国服（简中）Master diff
+- https://github.com/Sekai-World/sekai-master-db-tc-diff — 台服（繁中）Master diff
+- https://sekai-world.github.io/sekai-master-db-diff/wordings.json
+- https://sekai-world.github.io/sekai-master-db-cn-diff/wordings.json
+- https://github.com/Sekai-World/sekai-assets-updater — 多区 AssetBundle（`REGION`: JP/CN/TW/KR/EN）
 - https://sekai.best/
 - https://sekai.best/asset_viewer/scenario/background/bg_a000013_rip/
 - https://sekai.best/storyreader
