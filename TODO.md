@@ -21,9 +21,9 @@
 - [x] **剧情 `intercept` 验证**：`SetWordsInfo` 替换可见；样本 `name=ミク` `cid=21`，正文含换行（见 notes/frida.md §5）
 - [ ] **主界面 / UI 词表 `intercept` 补测**：确认 `UpdateWordingText` / `TMP_Text.set_text` 替换在菜单按钮可见（intercept 末段 `tmp=12`）
 - [ ] **调查剧情早期 `TMP_Text.set_text` 为 0**：显示经 `SetWordsInfo` 直达；后续 UI 操作后 `tmp` 会增长
-- [ ] **词表 key 对照**：在 dump / sekai.best 中查找已观测 key 原文：
-  - `MSG_STARTAPP_LOGIN` / `MSG_STARTAPP_MASTER`
-  - `WORD_DECIDE` / `WORD_CANCEL` / `MSG_MOVIE_SKIP_BODY`
+- [~] **词表 key 对照**：静态链路已理清（见 [text-rendering.md](notes/text-rendering.md) §词表）；`WORD_*` / 部分 `MSG_*` 已在 sekai-master-db-diff 对照
+  - [x] `WORD_DECIDE` / `WORD_CANCEL` / `MSG_MOVIE_SKIP_BODY` → 公开库可查
+  - [ ] `MSG_STARTAPP_LOGIN` / `MSG_STARTAPP_MASTER` → 公开库缺失，需设备 Master 缓存或新版 diff
 - [ ] **修正字符串读取策略**（基于加载阶段 monitor 结论）：
   - `SetWordingText` `onEnter` 读 key — 已验证可用，保留
   - `UpdateWordingText` `onLeave` 读返回值 — 已证实不可靠（`wordingText` 计数增加但 `readStr` 全 null），改 Hook `TMP_Text.set_text` 或 IDA 追 `sub_60282AC` 实现体
@@ -53,7 +53,7 @@
 
 ## P3 — 翻译数据管线
 
-- [ ] 从 sekai.best / Sekai-World 同步 **MasterWording** 词表，建立 `key → 日文 → 中文` 映射原型
+- [~] 从 sekai.best / Sekai-World 同步 **MasterWording** 词表，建立 `key → 日文 → 中文` 映射原型（数据源：`sekai-master-db-diff/wordings.json`，3519 条；见 [text-rendering.md](notes/text-rendering.md)）
 - [ ] 同步 **scenario / unitystory** JSON，建立剧情文本 ID → 译文映射
 - [ ] 在 `frida/scripts/intercept.js` 或新 `translate` 模式中接入 demo 词表（先覆盖 `MSG_STARTAPP_*` 等已观测 key）
 - [ ] 设计翻译包格式（版本号、checksum、热更新路径）
