@@ -88,6 +88,8 @@ def load_script(
         (LIB / "offsets.js").read_text(encoding="utf-8"),
         (LIB / "runtime.js").read_text(encoding="utf-8"),
     ]
+    if cfg_override:
+        parts.append(f"const CFG_OVERRIDE = {json.dumps(cfg_override, ensure_ascii=False)};\n")
     if extra_libs:
         for name in extra_libs:
             parts.append((LIB / name).read_text(encoding="utf-8"))
@@ -100,8 +102,6 @@ def load_script(
     story = load_story_text()
     if story:
         parts.append(f"const STORY_TEXT = {json.dumps(story, ensure_ascii=False)};\n")
-    if cfg_override:
-        parts.append(f"const CFG_OVERRIDE = {json.dumps(cfg_override, ensure_ascii=False)};\n")
     parts.append((SCRIPTS / f"{mode}.js").read_text(encoding="utf-8"))
     return "\n\n".join(parts)
 

@@ -1,11 +1,18 @@
 // Source Han TMP_FontAsset fallback injection (after il2cpp_unity.js)
 'use strict';
 
-const FONT_INJECT_CFG = Object.assign({
-    FONT_BUNDLE_PATH: '/sdcard/Android/data/com.sega.pjsekai/files/i18n/font/source-han-fallback.bundle',
-    FONT_ASSET_NAME: 'SourceHanSansSC-Regular SDF',
-    INJECT_BASES: ['baseA', 'baseB'],
-}, typeof CFG_OVERRIDE !== 'undefined' ? CFG_OVERRIDE : {});
+let _fontInjectCfgCache = null;
+
+function fontInjectCfg() {
+    if (_fontInjectCfgCache) return _fontInjectCfgCache;
+    const override = (typeof CFG_OVERRIDE !== 'undefined') ? CFG_OVERRIDE : {};
+    _fontInjectCfgCache = Object.assign({
+        FONT_BUNDLE_PATH: '/sdcard/Android/data/com.sega.pjsekai/files/i18n/font/source-han-fallback.bundle',
+        FONT_ASSET_NAME: 'SourceHanSansSC-Regular SDF',
+        INJECT_BASES: ['baseA', 'baseB'],
+    }, override);
+    return _fontInjectCfgCache;
+}
 
 let _cachedFallbackFont = null;
 let _fontInjectDone = false;
@@ -39,8 +46,9 @@ function appendToFallbackList(baseFont, fallbackFont) {
 function loadSourceHanTmpFont() {
     if (_cachedFallbackFont) return _cachedFallbackFont;
     bindIl2CppUnity();
-    const bundle = unityLoadAssetBundleFromFile(FONT_INJECT_CFG.FONT_BUNDLE_PATH);
-    const asset = unityLoadTmpFontAsset(bundle, FONT_INJECT_CFG.FONT_ASSET_NAME);
+    const cfg = fontInjectCfg();
+    const bundle = unityLoadAssetBundleFromFile(cfg.FONT_BUNDLE_PATH);
+    const asset = unityLoadTmpFontAsset(bundle, cfg.FONT_ASSET_NAME);
     _cachedFallbackFont = asset;
     return asset;
 }
@@ -66,7 +74,7 @@ function injectSourceHanIntoManager(mgr) {
     };
     const results = {};
     let ok = true;
-    const wanted = FONT_INJECT_CFG.INJECT_BASES || ['baseA', 'baseB'];
+    const wanted = fontInjectCfg().INJECT_BASES || ['baseA', 'baseB'];
     for (let i = 0; i < wanted.length; i++) {
         const label = wanted[i];
         const base = targets[label];
