@@ -5,6 +5,7 @@ import sys
 
 from .build import build_ui_pack
 from .fetch import fetch_all
+from .font_chars import build_font_charset_files
 from .story import build_story_pack, fetch_scenario_inventory
 
 
@@ -37,6 +38,13 @@ def cmd_build(args: argparse.Namespace) -> int:
             f"[+] aligned {stats.get('scenarios_aligned', 0)}/{stats.get('scenarios_processed', 0)} "
             f"scenarios"
         )
+    return 0
+
+
+def cmd_font_chars(args: argparse.Namespace) -> int:
+    charset_path, meta_path, meta = build_font_charset_files()
+    print(f"[+] font charset: {meta['char_count']} chars → {charset_path}")
+    print(f"[+] meta → {meta_path}")
     return 0
 
 
@@ -96,6 +104,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --with-story: write i18n/story/by-scenario/<id>.json",
     )
     p_build.set_defaults(func=cmd_build)
+
+    p_font = sub.add_parser(
+        "font-chars",
+        help="collect translation chars → i18n/font/charset.txt for Source Han subset",
+    )
+    p_font.set_defaults(func=cmd_font_chars)
 
     p_inv = sub.add_parser(
         "story-inventory",

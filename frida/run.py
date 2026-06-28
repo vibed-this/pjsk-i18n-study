@@ -18,7 +18,7 @@ from pathlib import Path
 
 import frida
 
-from device import PACKAGE, get_device
+from device import PACKAGE, _adb, get_device
 
 ROOT = Path(__file__).resolve().parent
 REPO_ROOT = ROOT.parent
@@ -27,6 +27,10 @@ SCRIPTS = ROOT / "scripts"
 UI_WORDINGS_PATH = REPO_ROOT / "i18n" / "ui" / "wordings.json"
 UI_PLAIN_TEXT_PATH = REPO_ROOT / "i18n" / "ui" / "plain-text.json"
 STORY_TEXT_PATH = REPO_ROOT / "i18n" / "story" / "text.json"
+FONT_BUNDLE_LOCAL = REPO_ROOT / "i18n" / "font" / "source-han-fallback.bundle"
+DEVICE_FONT_BUNDLE = f"/sdcard/Android/data/{PACKAGE}/files/i18n/font/source-han-fallback.bundle"
+FONT_ASSET_NAME = "SourceHanSansSC-Regular SDF"
+FONT_EXTRA_LIBS = ("il2cpp_unity.js", "font_inject.js")
 
 MODES = ("intercept", "monitor", "probe", "font")
 
@@ -52,11 +56,41 @@ def load_story_text() -> dict[str, str] | None:
     return load_json_string_map(STORY_TEXT_PATH)
 
 
-def load_script(mode: str, cfg_override: dict | None = None) -> str:
+def font_inject_cfg() -> dict:
+    return {
+        "FONT_BUNDLE_PATH": DEVICE_FONT_BUNDLE,
+        "FONT_ASSET_NAME": FONT_ASSET_NAME,
+    }
+
+
+def push_font_bundle() -> bool:
+    if not FONT_BUNDLE_LOCAL.is_file():
+        print(f"[!] font bundle missing: {FONT_BUNDLE_LOCAL}", flush=True)
+        print("    bake TMP asset — see i18n-data/font/README.md", flush=True)
+        return False
+    remote_dir = f"/sdcard/Android/data/{PACKAGE}/files/i18n/font"
+    _adb("shell", "mkdir", "-p", remote_dir)
+    proc = _adb("push", str(FONT_BUNDLE_LOCAL), DEVICE_FONT_BUNDLE)
+    if proc.returncode != 0:
+        print(f"[!] adb push failed: {proc.stderr.strip()}", flush=True)
+        return False
+    print(f"[+] pushed font bundle → {DEVICE_FONT_BUNDLE}", flush=True)
+    return True
+
+
+def load_script(
+    mode: str,
+    cfg_override: dict | None = None,
+    *,
+    extra_libs: tuple[str, ...] | None = None,
+) -> str:
     parts = [
         (LIB / "offsets.js").read_text(encoding="utf-8"),
         (LIB / "runtime.js").read_text(encoding="utf-8"),
     ]
+    if extra_libs:
+        for name in extra_libs:
+            parts.append((LIB / name).read_text(encoding="utf-8"))
     wordings = load_ui_wordings()
     if wordings:
         parts.append(f"const UI_WORDINGS = {json.dumps(wordings, ensure_ascii=False)};\n")
@@ -74,16 +108,22 @@ def load_script(mode: str, cfg_override: dict | None = None) -> str:
 
 def intercept_cfg(args: argparse.Namespace) -> dict:
     if args.story_mode == "dual":
-        return {
+        cfg = {
             "STORY_MODE": "dual",
             "DUAL_STYLE": args.dual_style,
             "INTERCEPT": {"TMP": False, "STORY": True, "UI": False},
+            "FONT_INJECT": args.font_inject,
         }
+        if args.font_inject:
+            cfg.update(font_inject_cfg())
+        return cfg
     ui_mode = "cn" if load_ui_wordings() else "prefix"
     story_mode = "cn" if load_story_text() else "prefix"
-    cfg: dict = {"STORY_MODE": story_mode, "UI_MODE": ui_mode}
+    cfg: dict = {"STORY_MODE": story_mode, "UI_MODE": ui_mode, "FONT_INJECT": args.font_inject}
     if ui_mode == "prefix" or story_mode == "prefix":
         cfg["PREFIX"] = args.prefix
+    if args.font_inject:
+        cfg.update(font_inject_cfg())
     return cfg
 
 
@@ -139,7 +179,10 @@ def fmt_capture(p: dict) -> str:
 
 
 def run_intercept(args: argparse.Namespace) -> int:
-    js = load_script("intercept", cfg_override=intercept_cfg(args))
+    extra_libs = FONT_EXTRA_LIBS if args.font_inject else None
+    if args.font_inject:
+        push_font_bundle()
+    js = load_script("intercept", cfg_override=intercept_cfg(args), extra_libs=extra_libs)
     intercepts: list[dict] = []
     captures: list[dict] = []
     stats: list[dict] = []
@@ -169,6 +212,8 @@ def run_intercept(args: argparse.Namespace) -> int:
                 f"demoKeys={p.get('demoKeys')}",
                 flush=True,
             )
+        elif ev == "font_inject":
+            print(fmt_font_inject(p), flush=True)
         elif ev in ("hook", "il2cpp", "error"):
             print(json.dumps(p, ensure_ascii=False), flush=True)
 
@@ -243,8 +288,34 @@ def fmt_font(p: dict) -> str:
     return "\n".join(lines)
 
 
+def fmt_font_inject(p: dict) -> str:
+    mark = "OK" if p.get("ok") else "FAIL"
+    lines = [f"── font_inject [{mark}]"]
+    if p.get("skipped"):
+        lines.append(f"   skipped: {p.get('reason')}")
+    if p.get("error"):
+        lines.append(f"   error: {p['error']}")
+    if p.get("reason") and not p.get("ok"):
+        lines.append(f"   reason: {p['reason']}")
+    fb = p.get("fallback")
+    if fb:
+        lines.append(f"   fallback: {fb.get('ptr')} name={fb.get('name')!r}")
+    for label, row in (p.get("results") or {}).items():
+        if not isinstance(row, dict):
+            continue
+        extra = ""
+        if row.get("sizeAfter") is not None:
+            extra = f" size {row.get('sizeBefore')}→{row.get('sizeAfter')}"
+        lines.append(f"   {label}({row.get('baseName')!r}): {'OK' if row.get('ok') else 'FAIL'}{extra}")
+    return "\n".join(lines)
+
+
 def run_font(args: argparse.Namespace) -> int:
-    js = load_script("font")
+    cfg = {"INJECT": args.inject, **(font_inject_cfg() if args.inject else {})}
+    extra_libs = FONT_EXTRA_LIBS if args.inject else None
+    if args.inject:
+        push_font_bundle()
+    js = load_script("font", cfg_override=cfg, extra_libs=extra_libs)
     events: list[dict] = []
 
     def on_message(message, _data):
@@ -256,12 +327,18 @@ def run_font(args: argparse.Namespace) -> int:
             print(json.dumps(p, ensure_ascii=False), flush=True)
         elif p.get("event") == "font":
             print(fmt_font(p), flush=True)
+        elif p.get("event") == "font_inject":
+            print(fmt_font_inject(p), flush=True)
         elif p.get("event") in ("ready", "stats", "hook", "il2cpp", "error"):
             print(json.dumps(p, ensure_ascii=False), flush=True)
 
     print("=" * 60, flush=True)
-    print("字体探测 — SetupBuiltinFontAsset / ClearFallbackFontAsset", flush=True)
-    print("冷启动或重进游戏以触发字体加载；leave 后看 fallbackSize", flush=True)
+    if args.inject:
+        print("思源 fallback 注入 — SetupBuiltinFontAsset onLeave", flush=True)
+        print(f"bundle: {DEVICE_FONT_BUNDLE}", flush=True)
+    else:
+        print("字体探测 — SetupBuiltinFontAsset / ClearFallbackFontAsset", flush=True)
+        print("冷启动或重进游戏以触发字体加载；leave 后看 fallbackSize", flush=True)
     print("=" * 60, flush=True)
 
     device = get_device()
@@ -400,6 +477,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="dual mode: plain newlines or TMP rich text for jp line",
     )
     parser.add_argument("--json", action="store_true", help="raw JSON output")
+    parser.add_argument(
+        "--inject",
+        action="store_true",
+        help="font mode: inject Source Han TMP fallback (requires bundle)",
+    )
+    parser.add_argument(
+        "--font-inject",
+        action="store_true",
+        help="intercept mode: also inject Source Han TMP fallback",
+    )
     return parser
 
 

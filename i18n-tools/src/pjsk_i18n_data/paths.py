@@ -33,3 +33,11 @@ OUT_STORY = OUT_ROOT / "story"
 OUT_STORY_TEXT = OUT_STORY / "text.json"
 OUT_STORY_BY_SCENARIO = OUT_STORY / "by-scenario"
 OUT_STORY_GAP_REPORT = OUT_ROOT / "reports" / "story-gap-report.json"
+
+OUT_FONT_DIR = OUT_ROOT / "font"
+OUT_FONT_CHARSET = OUT_FONT_DIR / "charset.txt"
+OUT_FONT_META = OUT_FONT_DIR / "charset-meta.json"
+OUT_FONT_BUNDLE = OUT_FONT_DIR / "source-han-fallback.bundle"
+
+FONT_DATA_DIR = I18N_DATA / "font"
+FONT_SOURCE_OTF = FONT_DATA_DIR / "SourceHanSansSC-Regular.otf"

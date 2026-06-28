@@ -46,6 +46,14 @@ i18n-data/cache/scenario/cn/**/*.json
 
 缓存（不提交 git）：`i18n-data/cache/`
 
+### 字体字符集（思源黑体子集）
+
+```bash
+uv run --project i18n-tools pjsk-i18n font-chars
+```
+
+产物 `i18n/font/charset.txt`；烘焙流程见 [i18n-data/font/README.md](../i18n-data/font/README.md)。
+
 ## Frida
 
 构建后 `frida/run.py intercept` 自动注入：

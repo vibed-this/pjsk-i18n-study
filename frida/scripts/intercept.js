@@ -29,6 +29,7 @@ const CFG = Object.assign({
     SKIP_IF_PREFIXED: true,
     MAX_LOG: 200,
     INTERCEPT: { TMP: true, STORY: true, UI: true },
+    FONT_INJECT: false,
 }, typeof CFG_OVERRIDE !== 'undefined' ? CFG_OVERRIDE : {});
 
 const stats = {
@@ -340,10 +341,16 @@ function install() {
         },
     });
 
+    if (CFG.FONT_INJECT && typeof installFontInjectHook === 'function') {
+        bindIl2CppUnity();
+        installFontInjectHook(stats);
+    }
+
     emit('ready', {
         mode: 'intercept',
         storyMode: CFG.STORY_MODE,
         uiMode: CFG.UI_MODE,
+        fontInject: CFG.FONT_INJECT,
         dualStyle: CFG.DUAL_STYLE,
         prefix: CFG.PREFIX,
         intercept: CFG.INTERCEPT,

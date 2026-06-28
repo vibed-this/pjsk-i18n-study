@@ -1,0 +1,12 @@
+{
+  "built_at": "2026-06-28T16:30:53+00:00",
+  "char_count": 2866,
+  "codepoint_count": 2866,
+  "sources": {
+    "ui_wordings": 1551,
+    "ui_plain_text": 2639,
+    "story_text": 47
+  },
+  "output_charset": "i18n/font/charset.txt",
+  "notes": "Subset Source Han Sans SC to this charset before TMP SDF bake"
+}

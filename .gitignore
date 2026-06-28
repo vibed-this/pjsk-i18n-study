@@ -72,6 +72,9 @@ frida/gadget/tools/
 # i18n pipeline cache (fetched CN/JP wordings; rebuild with pjsk-i18n fetch)
 # =============================================================================
 i18n-data/cache/
+i18n-data/font/*.otf
+i18n-data/font/*.ttf
+i18n/font/*.bundle
 
 # =============================================================================
 # Python (for sssekai scripts / tooling)

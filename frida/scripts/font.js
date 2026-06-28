@@ -1,17 +1,22 @@
-// Font probe — SetupBuiltinFontAsset / ClearFallbackFontAsset (read-only)
+// Font probe and/or Source Han fallback inject
 'use strict';
+
+const CFG = Object.assign({
+    INJECT: false,
+}, typeof CFG_OVERRIDE !== 'undefined' ? CFG_OVERRIDE : {});
 
 const stats = {
     setupEnter: 0,
     setupLeave: 0,
     clearFallback: 0,
+    fontInject: 0,
 };
 
 function emitFont(phase, hook, fields) {
     emit('font', Object.assign({ phase: phase, hook: hook }, fields));
 }
 
-function install() {
+function installProbe() {
     hookAt('FontAssetManager.SetupBuiltinFontAsset', OFFSETS.FontAssetManager_SetupBuiltinFontAsset, {
         onEnter(args) {
             stats.setupEnter++;
@@ -44,12 +49,24 @@ function install() {
             });
         },
     });
+}
+
+function install() {
+    if (CFG.INJECT) {
+        bindIl2CppUnity();
+        installFontInjectHook(stats);
+    } else {
+        installProbe();
+    }
 
     emit('ready', {
-        mode: 'font',
+        mode: CFG.INJECT ? 'font-inject' : 'font',
+        inject: CFG.INJECT,
         stats: stats,
         managerFields: FONT_MANAGER_FIELDS,
         tmpFontFallbackOff: TMP_FONT_FALLBACK_LIST,
+        bundlePath: CFG.FONT_BUNDLE_PATH || null,
+        assetName: CFG.FONT_ASSET_NAME || null,
     });
 }
 

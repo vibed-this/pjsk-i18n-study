@@ -37,8 +37,15 @@ uv run python frida/run.py intercept
 # 只读监控
 uv run python frida/run.py monitor --duration 90
 
+# 字体字符集（烘焙用）
+uv run --project i18n-tools pjsk-i18n font-chars
+
 # 字体加载探测（冷启动触发 SetupBuiltinFontAsset）
 uv run python frida/run.py font --duration 180
+
+# 思源 fallback 注入（需 i18n/font/source-han-fallback.bundle）
+uv run python frida/run.py font --inject --duration 180
+uv run python frida/run.py intercept --font-inject --duration 120
 
 # 验证 il2cpp 与偏移（spawn 模式）
 uv run python frida/run.py probe

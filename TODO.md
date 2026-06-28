@@ -79,7 +79,8 @@
 - [ ] 国服 `TMP_FontAsset` 提取：`sekai-assets-updater` `REGION=CN`，过滤 `font/` 相关 bundle（与 JP 6.5.5 对齐）
 - [ ] 对比 JP/CN 字体 bundle：真机主字体名为 **`DB`/`EB`**；用 assets-updater CN 解同名资产
 - [x] `SetupBuiltinFontAsset` 真机探测：启动 1 次，`baseA/baseB` fallbackSize=2（见 notes/frida.md §7）
-- [ ] fallback 注入原型：向 `[font+0x138]` fallback 表追加国服 CJK `TMP_FontAsset`（Zygisk 或 Frida）
+- [~] fallback 注入原型：Frida `font --inject` / `intercept --font-inject`（思源 TMP bundle）；**待** Unity 烘焙 bundle + 真机验收
+- [x] `pjsk-i18n font-chars` → `i18n/font/charset.txt`；烘焙说明 `i18n-data/font/README.md`
 - [ ] legacy `CustomText` / Unity `Text` 缺字路径（若 fallback 后仍 tofu）
 - [ ] 真机：`UI_MODE=cn` 下按钮/剧情无 tofu
 
@@ -126,6 +127,8 @@ uv run python frida/run.py intercept --duration 120
 uv run python frida/run.py monitor --duration 120
 uv run python frida/run.py probe
 
-# 字体加载探测
-uv run python frida/run.py font --duration 180
+# 字体字符集 + 烘焙见 i18n-data/font/README.md
+uv run --project i18n-tools pjsk-i18n font-chars
+uv run python frida/run.py font --inject --duration 180
+uv run python frida/run.py intercept --font-inject --duration 120
 ```
