@@ -1,21 +1,59 @@
-// Intercept demo — in-game prefix + structured PC output
+// Intercept — prefix demo or story dual-subtitle (zh + jp)
 'use strict';
+
+const DEMO_ZH = {
+    'ミク': '初音未来',
+    'こんにちは。\nここに誰かが来るなんて、珍しいな': '你好。这里居然还会有人来，真少见。',
+    'わたしは、初音ミク。\nキミの名前は？': '我是初音未来。你的名字是？',
+};
 
 const CFG = Object.assign({
     PREFIX: '[TEST] ',
+    STORY_MODE: 'prefix',   // 'prefix' | 'dual'
+    DUAL_STYLE: 'plain',    // 'plain' | 'rich'
+    DUAL_PLACEHOLDER: '译',
+    DUAL_TAG: '[[',         // 译文行以 [[...]] 包裹；用开头检测防重复
     SKIP_IF_PREFIXED: true,
     MAX_LOG: 200,
     INTERCEPT: { TMP: true, STORY: true, UI: true },
 }, typeof CFG_OVERRIDE !== 'undefined' ? CFG_OVERRIDE : {});
 
-const stats = { tmp: 0, story: 0, ui: 0, uiKey: 0, intercept: 0, skip: 0 };
+const stats = { tmp: 0, story: 0, ui: 0, uiKey: 0, intercept: 0, skip: 0, dual: 0 };
 
-function shouldSkip(text) {
+function lookupZh(jp) {
+    if (!jp) return CFG.DUAL_PLACEHOLDER;
+    if (Object.prototype.hasOwnProperty.call(DEMO_ZH, jp)) return DEMO_ZH[jp];
+    return CFG.DUAL_PLACEHOLDER;
+}
+
+function alreadyDualSubtitle(text) {
+    return !!(text && text.indexOf(CFG.DUAL_TAG) === 0);
+}
+
+function wrapZh(zh) {
+    return '[[' + zh + ']]';
+}
+
+function formatDualSubtitle(jp) {
+    const zhLine = wrapZh(lookupZh(jp));
+    if (CFG.DUAL_STYLE === 'rich') {
+        return zhLine + '\n<size=75%><color=#888888>' + jp + '</color></size>';
+    }
+    return zhLine + '\n' + jp;
+}
+
+function shouldSkipPrefix(text) {
     return CFG.SKIP_IF_PREFIXED && text && text.indexOf(CFG.PREFIX) === 0;
 }
 
 function prefixed(text) {
     return CFG.PREFIX + text;
+}
+
+function replaceArg(argPtr, nextText) {
+    const rep = makeStr(nextText);
+    if (!rep || rep.isNull()) return { ok: false, text: nextText };
+    return { ok: true, text: nextText, ptr: rep };
 }
 
 function logIntercept(hook, original, replaced, ok, extra) {
@@ -27,6 +65,28 @@ function logCapture(tag, fields) {
     emit('capture', Object.assign({ tag: tag }, fields));
 }
 
+function applyStoryDual(jp) {
+    if (!jp || alreadyDualSubtitle(jp)) {
+        return { changed: false, text: jp };
+    }
+    const next = formatDualSubtitle(jp);
+    const rep = makeStr(next);
+    if (!rep || rep.isNull()) return { changed: false, text: jp };
+    stats.dual++;
+    return { changed: true, text: next, ptr: rep };
+}
+
+function applyStoryPrefix(jp) {
+    if (!jp || shouldSkipPrefix(jp)) {
+        if (jp && shouldSkipPrefix(jp)) stats.skip++;
+        return { changed: false, text: jp };
+    }
+    const next = prefixed(jp);
+    const rep = makeStr(next);
+    if (!rep || rep.isNull()) return { changed: false, text: jp };
+    return { changed: true, text: next, ptr: rep };
+}
+
 function install() {
     if (CFG.INTERCEPT.TMP) {
         hookAt('TMP_Text.set_text', OFFSETS.TMP_Text_set_text, {
@@ -34,12 +94,12 @@ function install() {
                 stats.tmp++;
                 const orig = readStr(args[1]);
                 if (!orig) return;
-                if (shouldSkip(orig)) { stats.skip++; return; }
+                if (CFG.STORY_MODE === 'dual') return;
+                if (shouldSkipPrefix(orig)) { stats.skip++; return; }
                 const next = prefixed(orig);
-                const rep = makeStr(next);
-                const ok = !!(rep && !rep.isNull());
-                if (ok) args[1] = rep;
-                if (stats.tmp <= CFG.MAX_LOG) logIntercept('TMP_Text.set_text', orig, next, ok);
+                const hit = replaceArg(args[1], next);
+                if (hit.ok) args[1] = hit.ptr;
+                if (stats.tmp <= CFG.MAX_LOG) logIntercept('TMP_Text.set_text', orig, next, hit.ok);
             },
         });
     }
@@ -54,15 +114,38 @@ function install() {
                 let newName = name;
                 let newWords = words;
 
-                if (name && !shouldSkip(name)) {
-                    newName = prefixed(name);
-                    const rep = makeStr(newName);
-                    if (rep && !rep.isNull()) args[2] = rep;
+                if (CFG.STORY_MODE === 'dual') {
+                    let wordsHit = { changed: false, text: words };
+                    let nameHit = { changed: false, text: name };
+                    if (name) nameHit = applyStoryDual(name);
+                    if (words) wordsHit = applyStoryDual(words);
+                    newName = nameHit.text;
+                    newWords = wordsHit.text;
+                    if (nameHit.changed) args[2] = nameHit.ptr;
+                    if (wordsHit.changed) args[3] = wordsHit.ptr;
+                    if (stats.story <= CFG.MAX_LOG) {
+                        if (words) {
+                            logIntercept('TalkWindow.SetWordsInfo', words, newWords, wordsHit.changed,
+                                'mode=dual cid=' + cid + ' style=' + CFG.DUAL_STYLE);
+                        }
+                        if (name) {
+                            logCapture('STORY_NAME', {
+                                name: name, replaced: newName, ok: nameHit.changed, cid: cid, mode: 'dual',
+                            });
+                        }
+                    }
+                    return;
                 }
-                if (words && !shouldSkip(words)) {
-                    newWords = prefixed(words);
-                    const rep = makeStr(newWords);
-                    if (rep && !rep.isNull()) args[3] = rep;
+
+                if (name && !shouldSkipPrefix(name)) {
+                    const hit = applyStoryPrefix(name);
+                    newName = hit.text;
+                    if (hit.changed) args[2] = hit.ptr;
+                }
+                if (words && !shouldSkipPrefix(words)) {
+                    const hit = applyStoryPrefix(words);
+                    newWords = hit.text;
+                    if (hit.changed) args[3] = hit.ptr;
                 }
 
                 if (stats.story <= CFG.MAX_LOG) {
@@ -77,14 +160,14 @@ function install() {
         hookAt('CustomTextMesh.UpdateWordingText', OFFSETS.CustomTextMesh_UpdateWordingText, {
             onLeave(retval) {
                 stats.ui++;
+                if (CFG.STORY_MODE === 'dual') return;
                 const orig = readStr(retval);
                 if (!orig) return;
-                if (shouldSkip(orig)) { stats.skip++; return; }
+                if (shouldSkipPrefix(orig)) { stats.skip++; return; }
                 const next = prefixed(orig);
-                const rep = makeStr(next);
-                const ok = !!(rep && !rep.isNull());
-                if (ok) retval.replace(rep);
-                if (stats.ui <= CFG.MAX_LOG) logIntercept('UpdateWordingText', orig, next, ok);
+                const hit = replaceArg(retval, next);
+                if (hit.ok) retval.replace(hit.ptr);
+                if (stats.ui <= CFG.MAX_LOG) logIntercept('UpdateWordingText', orig, next, hit.ok);
             },
         });
     }
@@ -98,7 +181,15 @@ function install() {
         },
     });
 
-    emit('ready', { mode: 'intercept', prefix: CFG.PREFIX, intercept: CFG.INTERCEPT, stats: stats });
+    emit('ready', {
+        mode: 'intercept',
+        storyMode: CFG.STORY_MODE,
+        dualStyle: CFG.DUAL_STYLE,
+        prefix: CFG.PREFIX,
+        intercept: CFG.INTERCEPT,
+        demoKeys: Object.keys(DEMO_ZH).length,
+        stats: stats,
+    });
 }
 
 start(stats, install);

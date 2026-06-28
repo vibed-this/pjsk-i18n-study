@@ -10,4 +10,5 @@
 | IDA 二进制验证 | [ida-verification.md](./ida-verification.md) | Hook 点偏移与反汇编确认 |
 | Hook 策略 | [hook-strategy.md](./hook-strategy.md) | 分层 Hook 方案与下一步 |
 | Frida 动态分析 | [frida.md](./frida.md) | gadget 补丁、联调步骤 |
+| 剧情双语字幕 | [dual-subtitle.md](./dual-subtitle.md) | 双轨字幕可行性、打字机冲突（暂缓） |
 | 工具链与产物 | [toolchain.md](./toolchain.md) | 环境状态、产物路径索引 |

@@ -27,15 +27,25 @@ SCRIPTS = ROOT / "scripts"
 MODES = ("intercept", "monitor", "probe")
 
 
-def load_script(mode: str, prefix: str | None = None) -> str:
+def load_script(mode: str, cfg_override: dict | None = None) -> str:
     parts = [
         (LIB / "offsets.js").read_text(encoding="utf-8"),
         (LIB / "runtime.js").read_text(encoding="utf-8"),
     ]
-    if mode == "intercept" and prefix is not None:
-        parts.append(f"const CFG_OVERRIDE = {{ PREFIX: {json.dumps(prefix)} }};\n")
+    if cfg_override:
+        parts.append(f"const CFG_OVERRIDE = {json.dumps(cfg_override, ensure_ascii=False)};\n")
     parts.append((SCRIPTS / f"{mode}.js").read_text(encoding="utf-8"))
     return "\n\n".join(parts)
+
+
+def intercept_cfg(args: argparse.Namespace) -> dict:
+    if args.story_mode == "dual":
+        return {
+            "STORY_MODE": "dual",
+            "DUAL_STYLE": args.dual_style,
+            "INTERCEPT": {"TMP": False, "STORY": True, "UI": False},
+        }
+    return {"STORY_MODE": "prefix", "PREFIX": args.prefix}
 
 
 def attach(device: frida.core.Device, use_attach: bool) -> tuple[frida.core.Session, int | None]:
@@ -90,7 +100,7 @@ def fmt_capture(p: dict) -> str:
 
 
 def run_intercept(args: argparse.Namespace) -> int:
-    js = load_script("intercept", prefix=args.prefix)
+    js = load_script("intercept", cfg_override=intercept_cfg(args))
     intercepts: list[dict] = []
     captures: list[dict] = []
     stats: list[dict] = []
@@ -113,13 +123,20 @@ def run_intercept(args: argparse.Namespace) -> int:
             stats.append(p)
             print(f"[stats] {p.get('stats')}", flush=True)
         elif ev == "ready":
-            print(f"[*] ready prefix={p.get('prefix')!r}", flush=True)
+            print(
+                f"[*] ready storyMode={p.get('storyMode')!r} "
+                f"dualStyle={p.get('dualStyle')!r} demoKeys={p.get('demoKeys')}",
+                flush=True,
+            )
         elif ev in ("hook", "il2cpp", "error"):
             print(json.dumps(p, ensure_ascii=False), flush=True)
 
     if not args.json:
         print("=" * 60, flush=True)
-        print("拦截演示 — 屏幕应出现前缀，终端同步打印", flush=True)
+        if args.story_mode == "dual":
+            print("剧情双字幕 — 上行中文（demo 词表）、下行原文；仅 Hook SetWordsInfo", flush=True)
+        else:
+            print("拦截演示 — 屏幕应出现前缀，终端同步打印", flush=True)
         print("=" * 60, flush=True)
 
     device = get_device()
@@ -242,7 +259,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--duration", type=int, default=120)
     parser.add_argument("--attach", action="store_true", help="attach gadget/running app (default for intercept/monitor)")
     parser.add_argument("--spawn", action="store_true", help="spawn package (probe default)")
-    parser.add_argument("--prefix", default="[TEST] ", help="intercept prefix (intercept mode)")
+    parser.add_argument("--prefix", default="[TEST] ", help="prefix when --story-mode=prefix")
+    parser.add_argument(
+        "--story-mode",
+        choices=("prefix", "dual"),
+        default="prefix",
+        help="story intercept style: prefix or dual-subtitle",
+    )
+    parser.add_argument(
+        "--dual-style",
+        choices=("plain", "rich"),
+        default="plain",
+        help="dual mode: plain newlines or TMP rich text for jp line",
+    )
     parser.add_argument("--json", action="store_true", help="raw JSON output")
     return parser
 

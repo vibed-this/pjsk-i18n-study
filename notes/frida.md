@@ -18,7 +18,7 @@
 | 模拟器 | MuMu `emulator-5554`（x86_64 + ARM 转译，有 root） |
 | 注入点 | `MessagingUnityPlayerActivity.onCreate` → `System.loadLibrary("frida-gadget")` |
 | Gadget 配置 | listen `127.0.0.1:27042`，`on_load: wait` |
-| 监控脚本 | `frida/hook_monitor_bundle.js` |
+| 运行入口 | `uv run python frida/run.py`（monitor / intercept / probe） |
 
 ## 过程
 
@@ -74,28 +74,61 @@
 
 **文本读取**：`stats` 计数正常，但 `readIl2CppString` 对 `WordingManager.Get` 的返回值多为 null（IL2CPP 静态包装器间接返回）。`CustomTextMesh` 的 `onEnter` 日志亦未打出 `event:text` 样本——待改进脚本或改 Hook 层验证。
 
+### 4. monitor 长会话（2026-06-28，base=`0x7521015000`）
+
+脚本：`frida/run.py monitor`。`il2cpp_string_*` API 读串。
+
+**启动 / 加载阶段**（gadget 连接后约 20s）：
+
+| Hook | 次数 | 文本读取 |
+|------|------|----------|
+| `SetWordingText` | 2 | key：`MSG_STARTAPP_LOGIN`、`MSG_STARTAPP_MASTER` |
+| `UpdateWordingText` | 5 | `onLeave` 计数增加，**正文全 null** |
+| `TMP_Text.set_text` | 0 | — |
+| `SetWordsInfo` | 0 | — |
+
+**剧情阶段**（进入对话后）：
+
+| Hook | 次数 | 样本 |
+|------|------|------|
+| `SetWordsInfo` | 1 | `name=ミク`，`cid=21`，`words=こんにちは。\nここに誰かが来るなんて、珍しいな` |
+| `SetWordingText` | +3（累计 6） | `WORD_DECIDE`、`WORD_CANCEL`、`MSG_MOVIE_SKIP_BODY` |
+| `UpdateWordingText` | 23→37 | 仍无 `[UI]` 正文（`onLeave` 不可靠） |
+| `TMP_Text.set_text` | **0** | 剧情早期显示未经过该 hook；后续 UI 操作后会增长 |
+
+### 5. intercept 剧情验证（2026-06-28，base=`0x7521015000`）
+
+脚本：`frida/run.py intercept`，`PREFIX='[TEST] '`。
+
+| 项 | 结果 |
+|----|------|
+| `TalkWindow.SetWordsInfo` | ✅ 屏幕可见；`name=ミク`→`[TEST] ミク`，正文→`[TEST] わたしは、初音ミク。\nキミの名前は？` |
+| `cid` | 21 |
+| `TMP_Text.set_text` | 剧情初段 `tmp=0`，会话后期增至 **12**（UI 刷新后触发） |
+| `UpdateWordingText` | `ui` 增至 9（替换逻辑已执行，monitor 层仍读不出原文） |
+
+**结论**：剧情翻译 Hook 点 **`SetWordsInfo` 已完成 read + intercept E2E 验证**，可作为 Zygisk 剧情层实现依据。
+
 ## 结论
 
 | 项 | 状态 |
 |----|------|
 | Frida 原型环境（真机 gadget） | ✅ 可用 |
 | IDA 偏移在真机运行时有效 | ✅ 已验证（3/3 安装成功） |
-| Hook 点有实际调用 | ✅ UI 层已确认；剧情层待测 |
-| 文本内容抓取 | ⏳ 计数 OK，字符串读取待修 |
-| 翻译替换原型 | ⏳ `hook_translate.js` 未测 |
+| Hook 点有实际调用 | ✅ UI + 剧情均已确认 |
+| 文本内容抓取 | ✅ 剧情 `SetWordsInfo`、UI `SetWordingText` key；⏳ `UpdateWordingText` 正文、`TMP_Text.set_text` 待补 |
+| 翻译替换原型 | ✅ 剧情 `SetWordsInfo` 可见替换；⏳ UI 词表待补测 |
 | 模拟器 frida-server | ❌ 搁置 |
 
 ### 推荐联调流程
 
 ```powershell
-cd frida/gadget
-.\install.ps1                    # 首次或更新补丁后
-adb forward tcp:27042 tcp:27042  # connect.ps1 内含
-# 手机启动 PJSK（暂停）→ PC 连接：
-.\connect.ps1
-# 或 Python：
-cd ..\..
-python frida/run_session.py hook_monitor_bundle.js --duration 90 --attach
+cd E:\GithubRepos\pjsk-i18n-mod
+uv sync
+adb forward tcp:27042 tcp:27042
+uv run python frida/run.py monitor --duration 120   # 只读
+uv run python frida/run.py intercept --duration 120 # 可见替换
+# 或：frida/gadget/connect.ps1
 ```
 
 连接目标优先 **`Gadget`**，其次 `com.sega.pjsekai`。
@@ -104,10 +137,9 @@ python frida/run_session.py hook_monitor_bundle.js --duration 90 --attach
 
 ```
 frida/
-├── config.js / il2cpp.js
-├── hook_monitor.js / hook_monitor_bundle.js
-├── hook_translate.js
-├── device.py / run_session.py / run_probe.py
+├── run.py / device.py / README.md
+├── lib/offsets.js / lib/runtime.js
+├── scripts/monitor.js / intercept.js / probe.js
 └── gadget/
     ├── patch_apk.ps1 / install.ps1 / connect.ps1
     ├── libfrida-gadget.config.so
@@ -117,13 +149,16 @@ frida/
 
 ### 待验证项
 
-- [ ] 剧情场景中 `TalkWindow.SetWordsInfo` 调用与文本读取
-- [ ] `CustomTextMesh.SetText` 实际文本内容打印
-- [ ] `hook_translate.js` 替换是否在游戏内可见
-- [ ] 游戏 `versionName` 与本地 `apk/` 一致性（模拟器曾见 6.5.5）
+- [x] 剧情 `TalkWindow.SetWordsInfo` 调用与文本读取
+- [x] `intercept` 剧情替换游戏内可见
+- [ ] 主界面 / UI 词表 `intercept` 可见性
+- [ ] 剧情早期 `TMP_Text.set_text` 绕过规律（`SetWordsInfo` 直达显示）
+- [ ] 主界面 `TMP_Text.set_text` 正文读取
+- [ ] 游戏 `versionName` 与本地 `apk/` 一致性（真机 6.5.5）
 
 ## 相关笔记
 
 - [hook-strategy.md](./hook-strategy.md) — Hook 优先级与 Zygisk 下一步
+- [dual-subtitle.md](./dual-subtitle.md) — 剧情双语字幕（暂缓）
 - [toolchain.md](./toolchain.md) — SDK 路径、环境状态
 - [ida-verification.md](./ida-verification.md) — 静态偏移来源

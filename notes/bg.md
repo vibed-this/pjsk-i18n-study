@@ -146,7 +146,7 @@ Zygisk 模块 + native Hook 库
 ### 已确认的开放问题
 
 - ~~剧情对话框文本渲染组件~~ → 已确认，见 [text-rendering.md](./text-rendering.md)
-- 剧情 Hook `SetWordsInfo` 在真机动态场景中**尚未触发验证**（Frida 计数为 0）
+- ~~剧情 Hook `SetWordsInfo` 真机验证~~ → 已验证，`onEnter` 可读 `X2`/`X3`（见 [frida.md](./frida.md) §4）
 - `WordingManager.Get` 返回值在 Frida 层难以直接读取，native Hook 实现方式待决
 - 游戏是否使用了自定义振假名层（影响字体注入策略）→ 见 [text-rendering.md](./text-rendering.md)，无独立剧情振假名层
 

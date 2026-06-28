@@ -35,11 +35,11 @@ UI 文本   → WordingManager.Get        @ 0x60241BC   key → 中文 lookup，
 
 | 层级 | 函数 | 优势 | 劣势 | Frida 验证 |
 |------|------|------|------|------------|
-| 剧情 | `SetWordsInfo` | 在打字机效果之前拦截；参数明确；调用者少 | 仅覆盖剧情对话 | ⏳ 已安装，待进剧情测 |
+| 剧情 | `SetWordsInfo` | 在打字机效果之前拦截；参数明确；调用者少 | 仅覆盖剧情对话 | ✅ 明文读取 + `[TEST]` 可见替换（cid=21） |
 | UI | `WordingManager.Get` | 一次 Hook 覆盖大部分菜单/按钮词表 | 静态包装器，返回值读取困难 | ✅ 有调用；字符串待修 |
 | 兜底 | `CustomTextMesh.SetText` | 覆盖所有 CustomTextMesh 实例 | 调用频繁，需高效 lookup | ✅ 有调用；字符串待修 |
 | 字体 | `SetupBuiltinFontAsset` | 在字体加载时注入 fallback | 需准备 CJK TMP_FontAsset | 未测 |
-| 底层 | `TMP_Text.set_text` | 覆盖所有 TMP 文本 | 范围过宽，性能压力大 | 未测 |
+| 底层 | `TMP_Text.set_text` | 覆盖所有 TMP 文本 | 范围过宽；剧情样本中计数为 0 | ⏳ 待主界面/深剧情补测 |
 
 ## 结论
 
@@ -50,11 +50,12 @@ UI 文本   → WordingManager.Get        @ 0x60241BC   key → 中文 lookup，
 
 ## 下一步
 
-1. **Frida 深化**：修复字符串读取；进剧情验证 `SetWordsInfo`；测试 `hook_translate.js` 可见替换。
+1. **Frida 收尾**：UI 词表 `intercept` 补测；`TMP_Text.set_text` 主界面行为确认。
 2. **Zygisk 模块**：参照 gakuen-imas-localify，用已验证偏移封装 ShadowHook/Dobby native 库。
 3. **翻译数据**：从 sekai.best 同步 scenario JSON 与 MasterWording 词表，建立 key/原文 → 中文映射。
 
 ## 相关笔记
 
 - Frida 联调细节：[frida.md](./frida.md)
+- 双语字幕（暂缓）：[dual-subtitle.md](./dual-subtitle.md)
 - 环境与阻塞项：[toolchain.md](./toolchain.md)
