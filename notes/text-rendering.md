@@ -138,7 +138,58 @@ CustomTextMesh.SetWordingText(key)  // 0x4F2B408，仅存 key 到 0x7A0
 
 `MSG_STARTAPP_*` 共 4 个字面量均在二进制中，但不在当前公开 `wordings.json`——可能是**较新版本新增 key**，需从真机 `MasterDataManager` 缓存或更新版 master diff 补齐。
 
-#### 4. 与剧情文本的区分
+#### 4. `MSG_STARTAPP_*` 来源追踪（2026-06-28）
+
+**结论**：四个 key 均为 **`TitleController` 登录流程中硬编码的字面量**（`stringliteral.json` / IDA 数据段），**非** Prefab `wordingKey` 序列化字段。显示时经 `ShowWaitingDialog` → `StartAppWaitingDialog` → `CustomTextMesh.SetWordingText`（Frida 观测点）。
+
+##### 调用链（显示）
+
+```
+TitleController.ShowWaitingDialog(messageKey)   @ 0x4B30218
+  → WordingManager.Get(messageKey)              @ 0x60282AC（实现体；包装器 0x60241BC）
+  → StartAppWaitingDialog.SetText(key)          @ 0x4B012CC
+  → CustomTextMesh.SetWordingText(key)          @ 0x4F2B408  ← Frida monitor 命中处
+  → UpdateWordingText → TMP set_text
+```
+
+`StartAppWaitingDialog` 挂在 `TitleController.waitingDialog`（静态字段），对应 `DialogType.StartAppWaitingDialog = 84`。
+
+##### IDA 字面量 xref → 函数
+
+| key | 字面量地址 | 引用函数（RVA） | 场景 |
+|-----|-----------|----------------|------|
+| `MSG_STARTAPP_LOGIN` | `0xB7228C8` | `TitleController.Authentication` `0x4B307E4` | 用户认证 API 进行中 |
+| `MSG_STARTAPP_LOGIN` | `0xB7228C8` | `TitleController.<>c.<OnFinishAuthenticationAsync>b__31_0` `0x4B3486C` | 认证异步回调内再次弹出等待框 |
+| `MSG_STARTAPP_MASTER` | `0xB7228D0` | `TitleController.<OnFinishAuthenticationAsync>d__31.MoveNext` `0x4B35220` | **Master 数据下载前**更新等待文案 |
+| `MSG_STARTAPP_REGISTER` | `0xB7228D8` | `TitleController.OnFinishAppInfoAPI` `0x4B30780` | AppInfo API 失败分支 |
+| `MSG_STARTAPP_USER` | `0xB7228E0` | `TitleController.OnFinishSystemAPI` `0x4B30F24` | System API 返回 status `0x12`（18）时 |
+
+`MSG_STARTAPP_MASTER` 引用点后紧跟 `MasterDataManager.LoadMaster`（`0x604E5B0`）调用，与真机「正在下载数据」阶段一致。
+
+##### 标题登录状态机（简化）
+
+```mermaid
+flowchart TD
+    A[TitleController.Login] --> B[OnFinishGetCookie]
+    B --> C[OnFinishAppInfoAPI]
+    C -->|成功| D[Authentication<br/>MSG_STARTAPP_LOGIN]
+    C -->|失败| E[ShowWaitingDialog<br/>MSG_STARTAPP_REGISTER]
+    D --> F[OnFinishAuthentication]
+    F --> G[OnFinishAuthenticationAsync]
+    G --> H[ShowWaitingDialog<br/>MSG_STARTAPP_MASTER]
+    H --> I[MasterDataManager.LoadMaster]
+    I --> J[OnFinishLoadMaster / 后续 API]
+    J --> K[OnFinishSystemAPI]
+    K -->|status==18| L[ShowWaitingDialog<br/>MSG_STARTAPP_USER]
+```
+
+##### 日文正文从哪来
+
+- **key 定义**：编译进 `libil2cpp.so` 的 C# 字面量（`TitleController` 登录管线）。
+- **日文 value**：仍在运行时 `WordingManager.Get` 查 `MasterWording` 表；`LoadMaster` 完成前可能显示 key 本身或空，完成后才有日文。
+- 公开 `wordings.json` 缺失不代表游戏内无译文——需等 Master 落地后 Hook `WordingManager.Get` 或导出设备 `MasterDataManager` 缓存验证。
+
+#### 5. 与剧情文本的区分
 
 | 类型 | 数据形态 | Hook 点 |
 |------|----------|---------|

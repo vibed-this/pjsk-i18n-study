@@ -23,7 +23,8 @@
 - [ ] **调查剧情早期 `TMP_Text.set_text` 为 0**：显示经 `SetWordsInfo` 直达；后续 UI 操作后 `tmp` 会增长
 - [~] **词表 key 对照**：静态链路已理清（见 [text-rendering.md](notes/text-rendering.md) §词表）；`WORD_*` / 部分 `MSG_*` 已在 sekai-master-db-diff 对照
   - [x] `WORD_DECIDE` / `WORD_CANCEL` / `MSG_MOVIE_SKIP_BODY` → 公开库可查
-  - [ ] `MSG_STARTAPP_LOGIN` / `MSG_STARTAPP_MASTER` → 公开库缺失，需设备 Master 缓存或新版 diff
+  - [x] `MSG_STARTAPP_*` 静态来源 — `TitleController` 登录链硬编码；见 [text-rendering.md](notes/text-rendering.md) §4
+  - [ ] `MSG_STARTAPP_*` 日文 value — Master 加载后 Hook `WordingManager.Get` 或导出设备缓存对照
 - [ ] **修正字符串读取策略**（基于加载阶段 monitor 结论）：
   - `SetWordingText` `onEnter` 读 key — 已验证可用，保留
   - `UpdateWordingText` `onLeave` 读返回值 — 已证实不可靠（`wordingText` 计数增加但 `readStr` 全 null），改 Hook `TMP_Text.set_text` 或 IDA 追 `sub_60282AC` 实现体
