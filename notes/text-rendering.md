@@ -329,6 +329,101 @@ i18n/
 
 ---
 
+## 剧情文本能否直接挪用国服（2026-06-28）
+
+### 分析目标
+
+评估日服客户端 Mod 能否**直接复用国服官方剧情译文**（仅 CN 已有的部分），以及可行对齐方式与缺口。
+
+### 手段
+
+- `dump.cs`：`ScenarioSceneData`、`ScenarioSnippetTalk`、`TalkWindow.SetWordsInfo`、`ScenarioPlayer.SnippetActionTalk`
+- Sekai-World Master diff（JP / CN）交叉统计 `scenarioId`
+- `sekai-assets-updater` 多区 `REGION` 文档
+
+### 过程
+
+#### 1. 剧情与 UI 词表是两条管线
+
+| 维度 | UI 词表 | 剧情 |
+|------|---------|------|
+| 数据源 | `MasterWording` / `wordings.json` | AssetBundle 内 `ScenarioSceneData` JSON |
+| 运行时入口 | `WordingManager.Get(key)` | `ScenarioPlayer` → `TalkWindow.SetWordsInfo(name, body)` |
+| CN diff 是否覆盖 | ✅ `wordings.json` | ❌ 不含对话正文 |
+
+剧情单句结构（`ScenarioSnippetTalk`）：
+
+```
+WindowDisplayName  — 对话框显示名（可与 Master 角色名不同）
+Body               — 正文（含 \n、{{playerName}} 等）
+ReferenceIndex     — 由 ScenarioSnippet 引用进 Snippets 序列
+```
+
+`ScenarioPlayer` 常量 `REPLACE_CODE_USERNAME = "{{playerName}}"`，替换发生在播放前。
+
+#### 2. 「挪用」指什么
+
+| 做法 | 可行性 | 说明 |
+|------|--------|------|
+| 把国服 scenario AssetBundle 塞进日服客户端 | ❌ | 包名/加密/版本与 JP 服绑定；不能当「换包」 |
+| 提取国服 scenario JSON 的**中文文本**，日服运行时 Hook 替换 | ✅ | 与 UI 词表同理，只借**译文串**，不换资源包 |
+| 用国服 `wordings.json` 覆盖剧情 | ❌ | 剧情不走 `wordingKey` |
+
+#### 3. CN 有哪些、JP 多哪些（Master diff 快照）
+
+| 内容 | 日服 | 国服 | 共有 `scenarioId` | 仅日服 |
+|------|------|------|-------------------|--------|
+| 活动剧情集 `eventStories` | 1688 话 | 1498 话 | **1498** | 190 |
+| 活动 `events` | 208 | 182 | 182 | 26 |
+| 卡片剧情 `cardEpisodes` | 2670 | 2384 | **2384** | 286 |
+
+共有集的 **`scenarioId` 字符串在日/CN Master 中一致**（例如 `event_01_01`），可作为对齐主键。
+
+曲名等 Master 字段日/CN 多为同一字符串；**活动话标题**几乎全不同（如 `ひとりぼっちの雨模様` → `孤独的雨`），说明剧情正文确需单独拉 scenario JSON，不能靠 Master 表代替。
+
+#### 4. 对齐策略（按推荐顺序）
+
+**A. `scenarioId` + 行序（首选）**
+
+1. `sekai-assets-updater` 分别 `REGION=JP` / `REGION=CN` 解包 scenario
+2. 解析 `ScenarioSceneData`：`TalkData[]` + `Snippets[]` 中 `Action=Talk` 的 `ReferenceIndex`
+3. 对共有 `scenarioId`，按 **talk 行下标** 建立 `jp_body → cn_body`、`jp_displayName → cn_displayName`
+4. 校验：JP/CN 该 scenario 的 Talk 条数一致；不一致则记入 gap-report，该行 fallback 日文
+
+**B. 日文明文 hash lookup（实现快，与 `plain-text.json` 同构）**
+
+- 在 `SetWordsInfo` `onEnter` 用 `body` / `displayName` 查表
+- 优点：无需 Hook `ScenarioPlayer`；可复用已有 `lookupUiPlain` 模式
+- 缺点：同名台词/重复句会对齐歧义；`{{playerName}}` 展开前后文本不同，需规范化为占位符再查
+
+**C. 运行时上下文（精度最高）**
+
+- `SetWordsInfo` **没有** `scenarioId` 参数（仅 `characterId, displayName, words, …`）
+- 可在 `ScenarioPlayer.SnippetActionTalk` @ `0x6244D80` 设线程上下文 `(scenarioId, lineIndex)`，再供 `SetWordsInfo` 查 `story/{scenarioId}.json[line]`
+- Zygisk 量产推荐 A 预构建 + C 作校验
+
+#### 5. 与现有 Hook / 数据的衔接
+
+| 字段 | 来源 | 备注 |
+|------|------|------|
+| 角色 `displayName` | scenario `WindowDisplayName` 或 Master 名 | 可与 `plain-text.json`（`gameCharacters`）部分重叠 |
+| 正文 `body` | scenario `TalkData[].Body` | 必须来自 CN scenario 提取 |
+| 语音 | JP bundle 不变 | 替换文本后仍是日语音轨，属预期 |
+
+当前 `intercept.js` 剧情路径：`STORY_MODE=prefix` + 硬编码 `DEMO_ZH`；接入国服应改为 `story/*.json` 或合并进专用 `story-text.json`。
+
+### 结论
+
+| 问题 | 结论 |
+|------|------|
+| CN 有的剧情能否直接用？ | **能**，指复用**国服官方中文台词**（scenario JSON），不是换 CN 资源包 |
+| 覆盖大概多少？ | 活动 **1498** + 卡片 **2384** 个 `scenarioId` 有 CN 源；另有 **190+286** 话仅日服，需 fallback |
+| 和 UI 词表能否共用一张表？ | **不能**；剧情独立 `i18n/story/`，Hook 仍是 `SetWordsInfo` |
+| 最小可行路径 | assets-updater 拉 CN scenario → 按 `scenarioId`+行序生成 `jp→zh` → `SetWordsInfo` 替换 |
+| 主要风险 | 版本漂移（行数不一致）、JP 独占剧情、占位符与富文本、CJK 字体 |
+
+**下一步（游戏下载前可准备）**：在 `i18n-tools` 增加 `story` 构建子命令；Master diff 生成「共有 / 仅日服 `scenarioId` 清单」；真机用已验证的 `SetWordsInfo` Hook 接表。
+
 ## UI 文本覆盖分层（2026-06-28 静态分析）
 
 ### 分析目标
