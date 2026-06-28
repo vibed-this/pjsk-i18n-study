@@ -51,15 +51,16 @@ uv run python frida/run.py intercept
 uv run python frida/run.py intercept --prefix "[CN] " --duration 120
 ```
 
-## 三种模式
+## 模式
 
 | 模式 | 作用 | 游戏内效果 |
 |------|------|------------|
-| `intercept` | 抓取并替换文本 | 文字前加 `[TEST] ` 前缀 |
-| `monitor` | 只打印，不修改 | 无 |
+| `intercept` | 抓取并替换文本 | 国服替换或 `[TEST]` 前缀 |
+| `monitor` | 只读监控 | 无 |
+| `font` | 字体加载探测 | 无 |
 | `probe` | 检查模块与偏移 | 无 |
 
-`intercept` / `monitor` 默认 **attach**（连 gadget）；`probe` 默认 **spawn**。
+`intercept` / `monitor` / `font` 默认 **attach**（连 gadget）；`probe` 默认 **spawn**。
 
 ## 连接说明
 

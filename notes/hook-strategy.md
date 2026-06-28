@@ -55,6 +55,15 @@ UI slot   → CustomTextMesh.SetText（ICustomText） @ 0x4F2B590   UpdateWordin
 - UI 拦截主点：**`WordingManager.GetImpl` `onLeave`**；辅以 `CustomTextMesh.SetText` / slot 与 `SetWordingText`（读 key）。剧情首选 `SetWordsInfo`。
 - 字体方案优先考虑向 `TMP_FontAsset.fallbackFontAssetTable` 注入含 CJK 字符的子集字体。
 
+### 字体注入挂点（2026-06-29 真机 font 探测）
+
+| 时机 | 函数 | 动作 |
+|------|------|------|
+| ❌ 过早 | `ClearFallbackFontAsset` @ `0x61024F8` | 清空 List，勿在此后依赖旧 size |
+| ✅ 推荐 | `SetupBuiltinFontAsset` **onLeave** @ `0x61028AC` | 向 `baseA`/`baseB` 的 fallback List 追加 CN 字体 |
+
+真机快照（6.5.5）：内置主字体名为 **`EB`**（`+0x20`）、**`DB`**（`+0x38`）；leave 后各 `fallbackSize=2`。国服应提供同名 `TMP_FontAsset`（CJK glyph），从 CN AssetBundle 提取后 `List.Add` 到 `[font+0x138]`。
+
 ---
 
 ## 版本更新与偏移维护

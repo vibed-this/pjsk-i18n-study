@@ -170,11 +170,30 @@ frida/
     └── out/            # *.gadget.apk（已签名，~500MB 总量）
 ```
 
+### 7. font 字体加载探测（2026-06-29，base=`0x7511111000`）
+
+脚本：`frida/run.py font`。冷启动 attach 后约 10s 内触发。
+
+| 项 | 结果 |
+|----|------|
+| `SetupBuiltinFontAsset` | ✅ 1 次 enter/leave |
+| `ClearFallbackFontAsset` | ✅ 4 次（写入前清空 fallback） |
+| 内置字体名 | **`DB`**、**`EB`**（非 Master 明文名） |
+| `baseA`（EB）| `fallbackSize`：0 → **2** |
+| `baseB`（DB）| `fallbackSize`：0 → **2** |
+| `loadedA/B` | leave 后填入新加载的 EB/DB `TMP_FontAsset` |
+
+**注入挂点**：`SetupBuiltinFontAsset` **onLeave**，向 `baseA`（`FontAssetManager+0x20`）与 `baseB`（`+0x38`）的 `[font+0x138]` List **追加**国服 CJK `TMP_FontAsset`（勿在 `ClearFallback` 之前注入）。
+
+**国服对齐**：CN 客户端应存在同名 DB/EB 资产（CJK atlas）；用 `sekai-assets-updater` `REGION=CN` 解 `font/` bundle 提取。
+
 ### 待验证项
 
 - [x] 剧情 `TalkWindow.SetWordsInfo` 调用与文本读取
 - [x] `intercept` 剧情替换游戏内可见
-- [ ] 主界面 / UI 词表 `intercept` 可见性
+- [x] `FontAssetManager.SetupBuiltinFontAsset` 调用时机与 fallback 表
+- [x] 主界面 / UI 词表 `intercept` 简中命中（字体 tofu 待 P5）
+- [ ] 国服 CJK fallback 注入后无 tofu
 - [ ] 剧情早期 `TMP_Text.set_text` 绕过规律（`SetWordsInfo` 直达显示）
 - [ ] 主界面 `TMP_Text.set_text` 正文读取
 - [ ] 游戏 `versionName` 与本地 `apk/` 一致性（真机 6.5.5）

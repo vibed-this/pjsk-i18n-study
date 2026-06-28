@@ -87,12 +87,12 @@ ARM64 参数：
 
 | 偏移 | 用途（推断） |
 |------|----------------|
-| `+0x20` | 主字体 A（接收 fallback） |
-| `+0x28` | 加载资产 A |
-| `+0x30` | fallback 源 A |
-| `+0x38` | 主字体 B |
-| `+0x40` | 加载资产 B |
-| `+0x48` | fallback 源 B |
+| `+0x20` | 主字体 A — 真机名 **`EB`**（接收 fallback） |
+| `+0x28` | 加载资产 A — leave 后为新 EB 实例 |
+| `+0x30` | fallback 源 A — EB |
+| `+0x38` | 主字体 B — 真机名 **`DB`** |
+| `+0x40` | 加载资产 B — leave 后为新 DB 实例 |
+| `+0x48` | fallback 源 B — DB |
 
 ### `Sekai_FontAssetManager_ClearFallbackFontAsset` — 清空 fallback 表
 

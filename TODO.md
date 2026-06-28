@@ -77,8 +77,8 @@
 ## P5 — 字体注入（当前焦点）
 
 - [ ] 国服 `TMP_FontAsset` 提取：`sekai-assets-updater` `REGION=CN`，过滤 `font/` 相关 bundle（与 JP 6.5.5 对齐）
-- [ ] 对比 JP/CN 字体 bundle 名与 `FontAssetManager` 字段（`_builtInFontDB/EB`、`_baseFontDB` 等）
-- [~] `SetupBuiltinFontAsset` @ `0x61028AC`：`frida/run.py font` 探测脚本已加；**待**真机跑 leave 日志确认 fallbackSize
+- [ ] 对比 JP/CN 字体 bundle：真机主字体名为 **`DB`/`EB`**；用 assets-updater CN 解同名资产
+- [x] `SetupBuiltinFontAsset` 真机探测：启动 1 次，`baseA/baseB` fallbackSize=2（见 notes/frida.md §7）
 - [ ] fallback 注入原型：向 `[font+0x138]` fallback 表追加国服 CJK `TMP_FontAsset`（Zygisk 或 Frida）
 - [ ] legacy `CustomText` / Unity `Text` 缺字路径（若 fallback 后仍 tofu）
 - [ ] 真机：`UI_MODE=cn` 下按钮/剧情无 tofu
