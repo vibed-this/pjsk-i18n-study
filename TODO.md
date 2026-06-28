@@ -11,20 +11,29 @@
 
 **游戏 APK 下载中，设备已断开** — 阻塞项：真机 Frida 联调。
 
-**就绪**：`i18n-tools` 已从国服 diff 构建 `i18n/ui/wordings.json`（4838 keys）；`intercept` 已接 `UI_MODE=cn`（`WordingManager.Get` 按 key 替换成简中）。
+**静态分析结论（2026-06-28）**：当前两路 Hook（`WordingManager.Get` + `TalkWindow.SetWordsInfo`）只覆盖 **词表 key 类 UI** 与 **剧情明文**。未覆盖的 UI 主要来自：
+
+1. **Master 表直出明文**（曲名/角色名/卡片技能等）→ `CustomTextMesh.SetText(slot)` 直写，不经 `Get`
+2. **`UI_MODE=cn` 下 `SetText` Hook 被跳过**（`intercept.js` `prefixEnterArg` 早退）→ 明文显示层无替换
+3. **`CustomText`**（legacy Unity Text，dump 约 140 处）→ 自有 `SetText` slot `0x4F2B1B4`，未 Hook
+4. **数据缺口**：306 日服独有 key、`MSG_STARTAPP_*` 不在 CN diff
+
+详见 [notes/text-rendering.md](notes/text-rendering.md) §UI 覆盖分层、[notes/hook-strategy.md](notes/hook-strategy.md) §未覆盖 UI 路径。
 
 **下载完成后第一件事**：
 
-1. 确认本地 `apk/` / 设备 `versionName` 与 `offsets.js` 注释（6.5.5）一致，必要时 `probe`
-2. `uv run --project i18n-tools pjsk-i18n build`（若 diff 有更新）
-3. `uv run python frida/run.py intercept` — 主界面 + 剧情 dialog，确认 **确定 / 取消** 等国服译文（非 `[TEST]` 前缀）
-4. 若 UI 仍为日文：核对 `Get` 的 key 参数索引（`args[0]`）与终端 `intercept` 日志
+1. 确认 `versionName` 与 `offsets.js`（6.5.5）一致 → `probe`
+2. `intercept` E2E：词表 UI（确定/取消）+ 曲名/角色名等 Master 明文是否仍为日文
+3. 若词表 OK、明文仍日文：在 `intercept.js` 为 `UI_MODE=cn` 启用 `SetText` 明文替换（需扩展 Master 映射表）
+4. 核对 `Get` 的 `args[0]` 与 `intercept` 日志
 
 ---
 
 ## P0 — Frida 真机验证（阻塞后续）
 
 - [ ] **国服词表 `intercept` E2E**：`UI_MODE=cn`，样本 `WORD_DECIDE`→确定、`WORD_CANCEL`→取消（游戏就绪后）
+- [ ] **Master 明文 UI 补测**：曲名列表/角色名等（预期当前仍为日文，验证静态分析）
+- [ ] **`UI_MODE=cn` + `SetText` 明文替换**：`intercept.js` 去掉 cn 早退 + Master 映射（见 hook-strategy §未覆盖）
 - [ ] **主界面菜单 `intercept`**：非剧情 dialog 的菜单按钮应显示简中
 - [ ] **主界面 `monitor` 补测**：`TMP_Text.set_text` 在主界面调用与读串
 - [ ] 确认设备 `versionName` 与本地 `apk/`、`offsets.js` 一致
@@ -55,6 +64,7 @@
 - [x] **i18n-tools**：`pjsk-i18n fetch/build` → `i18n/ui/wordings.json` + `manifest.json` + `gap-report.json`
 - [x] **Frida 接入**：`run.py` 注入 `UI_WORDINGS`；`intercept.js` key → zh
 - [ ] **真机 E2E**（P0，游戏下载后）
+- [ ] **Master 明文映射**：从 CN diff 拉 `music.json` / `gameCharacters.json` 等，供 `SetText` 按原文 lookup
 - [ ] `overrides/ui.yaml`：`MSG_STARTAPP_*`、日服独有 306 key（见 `i18n/reports/gap-report.json`）
 - [ ] 剧情：**scenario** JSON 对齐（`sekai-assets-updater` `REGION=CN`），独立于 UI 词表
 - [ ] 翻译包热更新路径（manifest checksum 已有）

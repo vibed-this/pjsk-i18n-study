@@ -327,6 +327,90 @@ i18n/
 - **剧情**：需 `sekai-assets-updater` `REGION=CN` 或等价国服 scenario 提取，与 UI 词表分开存储。
 - **合规**：国服译文属官方资产，Mod 分发时需自行评估版权与使用范围（技术可行 ≠ 可随意再分发）。
 
+---
+
+## UI 文本覆盖分层（2026-06-28 静态分析）
+
+### 分析目标
+
+解释「`WordingManager.Get` + `SetWordsInfo` 已 Hook，但仍有部分 UI 为日文」的原因，并列出旁路显示链路与补 Hook 方向。
+
+### 手段
+
+- `dump.cs` 组件统计（`CustomText` vs `CustomTextMesh` 字段引用）
+- IDA 反汇编：`CustomText.UpdateWordingText`、`MusicInfoContent.SetupMusicInfo`、`TalkWindow.SetText`
+- 对照 `intercept.js` `UI_MODE=cn` 行为
+
+### 过程
+
+#### 1. 已覆盖的两条主线
+
+| 类型 | 数据形态 | 当前 Hook | 覆盖范围 |
+|------|----------|-----------|----------|
+| UI 词表 | `wordingKey` → `WordingManager.dictionary` | `GetImpl` / `GetFormat` `onLeave` | 菜单、对话框、带 key 的 Prefab |
+| 剧情 | 明文角色名 + 正文 | `TalkWindow.SetWordsInfo` `onEnter` | 剧情对话（写入 `[this+0xA0]` 后打字机读同一字段） |
+
+词表链路（已验证 IDA 调用）：
+
+```
+SetWordingText(key) / useWordingKey+Start
+  → UpdateWordingText
+  → WordingManager.Get(key)     @ 0x60282AC
+  → CustomTextMesh.SetText(slot) @ 0x4F2B590（tail-call）
+```
+
+#### 2. 未覆盖的三类旁路（主因）
+
+**A. Master 表直出明文（最大缺口）**
+
+曲名、角色名、卡片技能名等存在 `MasterMusic.title`、`MasterGameCharacter.firstName` 等字段，UI 逻辑**直接** `SetText(明文)`，**不经过** `WordingManager.Get`。
+
+IDA 实例 — `MusicInfoContent.SetupMusicInfo` @ `0x5FE6860`：
+
+```
+X1/X2/X3 = title / vocalName / artistName（来自 Master）
+  → CustomTextMesh.SetText(slot) @ 0x4F2B590 × 3
+```
+
+同类：`GameCharacterUtility.GetCharacterName` @ `0x4BBF194` 返回 Master 角色名 → 各 UI `SetText`。
+
+**B. `UI_MODE=cn` 下显示层 Hook 空转**
+
+`intercept.js` 中 `prefixEnterArg` 在 `UI_MODE=cn` 时**直接 return**，`CustomTextMesh.SetText` / slot **不替换明文**。因此 A 类文本即使 Hook 了 SetText 入口，当前脚本也不会改字。
+
+**C. `CustomText` 并行组件（legacy Unity Text）**
+
+| 组件 | dump 字段引用约数 | 词表路径 | 明文 SetText |
+|------|------------------|----------|--------------|
+| `CustomTextMesh` | ~1470 | `UpdateWordingText` → `Get` | slot `0x4F2B590` |
+| `CustomText` | ~140 | `UpdateWordingText` @ `0x4F2AF14` → `Get` @ `0x60282AC` | slot `0x4F2B1B4` → Unity `Text.set_text` |
+
+`CustomText` 走词表时仍命中 `Get` Hook；走明文时走 **另一条** vtable（`0x5E8`），当前未 Hook。
+
+**D. 少量原生 TMP 绕过**
+
+约 **14** 处 `TextMeshProUGUI` 字段（如 `TextContentView` @ `0x5B152EC`）不经 `CustomTextMesh`；兜底需 `TMP_Text.set_text` @ `0xA8D1B98`。
+
+#### 3. 数据层缺口（非 Hook 问题）
+
+| 缺口 | 影响 |
+|------|------|
+| 日服独有 306 `wordingKey` | `Get` lookup miss → 留日文 |
+| `MSG_STARTAPP_*` 不在 CN diff | 启动等待框需 `overrides` 或国服 APK 内置词表 |
+| Master 明文 | `wordings.json` **不含**曲名/角色名 → 需 CN diff `music.json` / `gameCharacters.json` 等 |
+
+### 结论
+
+| 层级 | 说明 | 当前状态 |
+|------|------|----------|
+| L1 词表 key | `WordingManager.Get` / `GetFormat` | ✅ 已 Hook + CN diff |
+| L2 词表显示 | `CustomTextMesh.SetText` 显示 `Get` 返回值 | ✅ cn 模式下依赖 L1；明文路径 ❌ |
+| L3 Master 明文 | 曲名/角色名/技能/任务描述等 | ❌ 无映射表 + SetText cn 早退 |
+| L4 剧情 | `SetWordsInfo` | ✅ 已 Hook（独立 scenario 管线） |
+| L5 兜底 | `TMP_Text.set_text` / `CustomText.SetText` | ⏳ 待启用 + 扩展数据 |
+
+**下一步（真机前可准备）**：扩展 i18n-tools 拉取 CN Master 明文表；`intercept.js` 在 `UI_MODE=cn` 为 `SetText` 增加「原文 → 中文」lookup；offsets 补 `CustomText.*`。详见 [hook-strategy.md](./hook-strategy.md) §未覆盖 UI 路径。
+
 ## 相关笔记
 
 - Hook 方案：[hook-strategy.md](./hook-strategy.md)
