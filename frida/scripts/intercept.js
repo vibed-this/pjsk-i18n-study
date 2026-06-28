@@ -11,6 +11,10 @@ function uiWordingsMap() {
     return (typeof UI_WORDINGS !== 'undefined' && UI_WORDINGS) ? UI_WORDINGS : {};
 }
 
+function uiPlainTextMap() {
+    return (typeof UI_PLAIN_TEXT !== 'undefined' && UI_PLAIN_TEXT) ? UI_PLAIN_TEXT : {};
+}
+
 const CFG = Object.assign({
     PREFIX: '[TEST] ',
     UI_MODE: 'prefix',  // 'cn' | 'prefix' — run.py sets 'cn' when wordings.json loaded
@@ -25,7 +29,7 @@ const CFG = Object.assign({
 
 const stats = {
     tmp: 0, story: 0, ui: 0, uiKey: 0,
-    wordingGet: 0, wordingFmt: 0, uiSetText: 0,
+    wordingGet: 0, wordingFmt: 0, uiSetText: 0, uiPlain: 0,
     intercept: 0, skip: 0, dual: 0,
 };
 
@@ -85,12 +89,31 @@ function applyStoryDual(jp) {
     return { changed: true, text: next, ptr: rep };
 }
 
-function prefixEnterArg(args, index, hookName, statBump) {
+function replaceEnterArgPlain(args, index, hookName, statBump) {
     if (statBump) statBump();
-    if (CFG.UI_MODE === 'cn') return;
-    if (CFG.STORY_MODE === 'dual') return;
     const orig = readStr(args[index]);
     if (!orig) return;
+    const zh = lookupUiPlain(orig);
+    if (!zh) return;
+    const hit = replaceArg(args[index], zh);
+    if (hit.ok) {
+        args[index] = hit.ptr;
+        stats.uiPlain++;
+    }
+    if (stats.intercept < CFG.MAX_LOG) {
+        logIntercept(hookName, orig, zh, hit.ok, 'mode=cn-plain');
+    }
+}
+
+function prefixEnterArg(args, index, hookName, statBump) {
+    if (statBump) statBump();
+    const orig = readStr(args[index]);
+    if (!orig) return;
+    if (CFG.UI_MODE === 'cn') {
+        replaceEnterArgPlain(args, index, hookName, null);
+        return;
+    }
+    if (CFG.STORY_MODE === 'dual') return;
     if (shouldSkipPrefix(orig)) { stats.skip++; return; }
     const next = prefixed(orig);
     const hit = replaceArg(args[index], next);
@@ -102,6 +125,13 @@ function lookupUiZh(key) {
     if (!key) return null;
     const map = uiWordingsMap();
     if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+    return null;
+}
+
+function lookupUiPlain(jp) {
+    if (!jp) return null;
+    const map = uiPlainTextMap();
+    if (Object.prototype.hasOwnProperty.call(map, jp)) return map[jp];
     return null;
 }
 
@@ -224,6 +254,11 @@ function install() {
                 prefixEnterArg(args, 1, 'CustomTextMesh.SetText(slot)', () => { stats.uiSetText++; });
             },
         });
+        hookAt('CustomText.SetText(slot)', OFFSETS.CustomText_SetText_slot, {
+            onEnter(args) {
+                prefixEnterArg(args, 1, 'CustomText.SetText(slot)', () => { stats.uiSetText++; });
+            },
+        });
         hookAt('WordingManager.Get', OFFSETS.WordingManager_GetImpl, {
             onEnter(args) {
                 this.key = readStr(args[0]);
@@ -253,6 +288,14 @@ function install() {
             if (key) logCapture('UI_KEY', { key: key });
         },
     });
+    hookAt('CustomText.SetWordingText', OFFSETS.CustomText_SetWordingText, {
+        onEnter(args) {
+            stats.uiKey++;
+            if (stats.uiKey > CFG.MAX_LOG) return;
+            const key = readStr(args[1]);
+            if (key) logCapture('UI_KEY', { key: key, component: 'CustomText' });
+        },
+    });
 
     emit('ready', {
         mode: 'intercept',
@@ -263,6 +306,7 @@ function install() {
         intercept: CFG.INTERCEPT,
         demoKeys: Object.keys(DEMO_ZH).length,
         uiWordings: Object.keys(uiWordingsMap()).length,
+        uiPlainText: Object.keys(uiPlainTextMap()).length,
         stats: stats,
     });
 }

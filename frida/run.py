@@ -25,17 +25,26 @@ REPO_ROOT = ROOT.parent
 LIB = ROOT / "lib"
 SCRIPTS = ROOT / "scripts"
 UI_WORDINGS_PATH = REPO_ROOT / "i18n" / "ui" / "wordings.json"
+UI_PLAIN_TEXT_PATH = REPO_ROOT / "i18n" / "ui" / "plain-text.json"
 
 MODES = ("intercept", "monitor", "probe")
 
 
-def load_ui_wordings() -> dict[str, str] | None:
-    if not UI_WORDINGS_PATH.is_file():
+def load_json_string_map(path: Path) -> dict[str, str] | None:
+    if not path.is_file():
         return None
-    data = json.loads(UI_WORDINGS_PATH.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"expected object in {UI_WORDINGS_PATH}")
+        raise ValueError(f"expected object in {path}")
     return {str(k): str(v) for k, v in data.items()}
+
+
+def load_ui_wordings() -> dict[str, str] | None:
+    return load_json_string_map(UI_WORDINGS_PATH)
+
+
+def load_ui_plain_text() -> dict[str, str] | None:
+    return load_json_string_map(UI_PLAIN_TEXT_PATH)
 
 
 def load_script(mode: str, cfg_override: dict | None = None) -> str:
@@ -46,6 +55,9 @@ def load_script(mode: str, cfg_override: dict | None = None) -> str:
     wordings = load_ui_wordings()
     if wordings:
         parts.append(f"const UI_WORDINGS = {json.dumps(wordings, ensure_ascii=False)};\n")
+    plain = load_ui_plain_text()
+    if plain:
+        parts.append(f"const UI_PLAIN_TEXT = {json.dumps(plain, ensure_ascii=False)};\n")
     if cfg_override:
         parts.append(f"const CFG_OVERRIDE = {json.dumps(cfg_override, ensure_ascii=False)};\n")
     parts.append((SCRIPTS / f"{mode}.js").read_text(encoding="utf-8"))
@@ -143,7 +155,8 @@ def run_intercept(args: argparse.Namespace) -> int:
         elif ev == "ready":
             print(
                 f"[*] ready storyMode={p.get('storyMode')!r} uiMode={p.get('uiMode')!r} "
-                f"uiWordings={p.get('uiWordings')} demoKeys={p.get('demoKeys')}",
+                f"uiWordings={p.get('uiWordings')} uiPlainText={p.get('uiPlainText')} "
+                f"demoKeys={p.get('demoKeys')}",
                 flush=True,
             )
         elif ev in ("hook", "il2cpp", "error"):
@@ -155,8 +168,10 @@ def run_intercept(args: argparse.Namespace) -> int:
             print("剧情双字幕 — 上行中文（demo 词表）、下行原文；仅 Hook SetWordsInfo", flush=True)
         else:
             w = load_ui_wordings()
+            p = load_ui_plain_text()
             if w:
-                print(f"UI 国服词表 — {len(w)} keys；WordingManager.Get 按 key 替换", flush=True)
+                extra = f"；plain-text {len(p)} 条" if p else ""
+                print(f"UI 国服词表 — {len(w)} keys；Get 按 key + SetText 按原文{extra}", flush=True)
             else:
                 print("拦截演示 — 屏幕应出现前缀，终端同步打印（未找到 i18n/ui/wordings.json）", flush=True)
         print("=" * 60, flush=True)

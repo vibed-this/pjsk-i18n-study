@@ -4,19 +4,22 @@ import argparse
 import sys
 
 from .build import build_ui_pack
-from .fetch import fetch_wordings
+from .fetch import fetch_all
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
-    cn, jp = fetch_wordings(refresh=args.refresh)
-    print(f"[+] cn: {cn.count} entries → {cn.path}")
-    print(f"[+] jp: {jp.count} entries → {jp.path}")
+    cn, jp, master = fetch_all(refresh=args.refresh)
+    print(f"[+] cn wordings: {cn.count} entries → {cn.path}")
+    print(f"[+] jp wordings: {jp.count} entries → {jp.path}")
+    for row in master:
+        print(f"[+] {row.label}: {row.count} entries → {row.path}")
     return 0
 
 
 def cmd_build(args: argparse.Namespace) -> int:
     result = build_ui_pack(fetch=not args.no_fetch, refresh=args.refresh)
     print(f"[+] ui wordings: {result.count} keys → {result.wordings_path}")
+    print(f"[+] plain text: {result.plain_count} pairs → {result.plain_text_path}")
     print(f"[+] manifest → {result.manifest_path}")
     print(f"[+] gap report → {result.report_path} (jp_only={len(result.jp_only)})")
     if result.override_count:

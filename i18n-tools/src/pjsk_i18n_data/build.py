@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .fetch import fetch_wordings
+from .master import build_plain_text_pack
 from .overrides import load_ui_overrides
 from .paths import (
     CACHE_CN,
     CACHE_JP,
     OVERRIDES_UI,
     OUT_MANIFEST,
+    OUT_PLAIN_TEXT,
     OUT_REPORT,
     OUT_UI,
     REPO_ROOT,
@@ -24,11 +26,13 @@ from .validate import validate_placeholders_preserved, validate_wordings_map
 @dataclass
 class BuildResult:
     count: int
+    plain_count: int
     override_count: int
     jp_only: list[str]
     cn_only: list[str]
     manifest_path: Path
     wordings_path: Path
+    plain_text_path: Path
     report_path: Path
 
 
@@ -71,6 +75,8 @@ def build_ui_pack(
 
     write_json(OUT_UI, merged)
 
+    _, plain_stats = build_plain_text_pack(fetch=fetch, refresh=refresh)
+
     gap_report = {
         "built_at": utc_now_iso(),
         "locale": lock.locale,
@@ -87,6 +93,7 @@ def build_ui_pack(
         "cn_only_sample": cn_only[:30],
         "validation_warnings": val.warnings
         + (placeholder_val.warnings if placeholder_val else []),
+        "plain_text": plain_stats,
     }
     write_json(OUT_REPORT, gap_report)
 
@@ -103,18 +110,23 @@ def build_ui_pack(
         "outputs": {
             "ui_wordings": str(OUT_UI.relative_to(REPO_ROOT)).replace("\\", "/"),
             "ui_wordings_sha256": _sha256_file(OUT_UI),
+            "ui_plain_text": str(OUT_PLAIN_TEXT.relative_to(REPO_ROOT)).replace("\\", "/"),
+            "ui_plain_text_sha256": _sha256_file(OUT_PLAIN_TEXT),
             "entry_count": len(merged),
+            "plain_text_count": plain_stats.get("entry_count", 0),
         },
-        "notes": "Runtime lookup: wordingKey → zh for WordingManager.Get on JP client",
+        "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText)",
     }
     write_json(OUT_MANIFEST, manifest)
 
     return BuildResult(
         count=len(merged),
+        plain_count=int(plain_stats.get("entry_count", 0)),
         override_count=len(overrides),
         jp_only=jp_only,
         cn_only=cn_only,
         manifest_path=OUT_MANIFEST,
         wordings_path=OUT_UI,
+        plain_text_path=OUT_PLAIN_TEXT,
         report_path=OUT_REPORT,
     )

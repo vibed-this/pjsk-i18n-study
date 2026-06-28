@@ -83,3 +83,11 @@ def fetch_wordings(
         },
     )
     return results[0], results[1]
+
+
+def fetch_all(*, refresh: bool = False) -> tuple[FetchResult, FetchResult, list[FetchResult]]:
+    from .master import fetch_master_tables
+
+    cn, jp = fetch_wordings(refresh=refresh)
+    master = fetch_master_tables(refresh=refresh)
+    return cn, jp, master

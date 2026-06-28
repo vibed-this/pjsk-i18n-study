@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-28T15:46:43+00:00",
+  "built_at": "2026-06-28T15:57:26+00:00",
   "locale": "zh-Hans",
   "counts": {
     "cn_source": 4838,
@@ -376,5 +376,68 @@
     "placeholder mismatch WORD_CREATE_CONFIRM: jp=['{0}', '{1}'] zh=['{1}', '{0}']",
     "placeholder mismatch WORD_EX_CHARACTER_MISSION_ADD_COMPLETE: jp=['{0}', '{1}'] zh=['{1}', '{0}']",
     "placeholder mismatch WORD_FIXTURE_CRAFT_CONFIRM: jp=['{0}', '{1}'] zh=['{1}', '{0}']"
-  ]
+  ],
+  "plain_text": {
+    "tables": {
+      "gameCharacters": {
+        "jp_rows": 26,
+        "cn_rows": 26,
+        "common_ids": 26,
+        "pairs_added": 38,
+        "skipped_same": 36,
+        "skipped_empty": 4
+      },
+      "musics": {
+        "jp_rows": 693,
+        "cn_rows": 598,
+        "common_ids": 581,
+        "pairs_added": 2,
+        "skipped_same": 2903,
+        "skipped_empty": 581
+      },
+      "musicVocals": {
+        "jp_rows": 1728,
+        "cn_rows": 1469,
+        "common_ids": 1449,
+        "pairs_added": 6,
+        "skipped_same": 1443,
+        "skipped_empty": 0
+      },
+      "cards": {
+        "jp_rows": 1392,
+        "cn_rows": 1249,
+        "common_ids": 1249,
+        "pairs_added": 3249,
+        "skipped_same": 500,
+        "skipped_empty": 2486
+      },
+      "characterProfiles": {
+        "jp_rows": 26,
+        "cn_rows": 26,
+        "common_ids": 26,
+        "pairs_added": 145,
+        "skipped_same": 41,
+        "skipped_empty": 48
+      }
+    },
+    "pairs": 3440,
+    "skipped_same": 4923,
+    "skipped_empty": 3119,
+    "collision_count": 10,
+    "collision_samples": [
+      "cards: 'Happy Birthday！！2023' → 'Happy Birthday！！Stamp' vs 'Happy Birthday！！Dessert'",
+      "cards: 'Happy Birthday！！2023' → 'Happy Birthday！！Stamp' vs 'Happy Birthday！！Dessert'",
+      "cards: 'Happy Anniversary！！2023' → 'Happy Anniversary！！Stamp' vs 'Happy Anniversary！！Dessert'",
+      "cards: 'Happy Birthday！！2023' → 'Happy Birthday！！Stamp' vs 'Happy Birthday！！Dessert'",
+      "cards: 'Happy Birthday！！2023' → 'Happy Birthday！！Stamp' vs 'Happy Birthday！！Dessert'",
+      "cards: 'Happy Anniversary！！2023' → 'Happy Anniversary！！Stamp' vs 'Happy Anniversary！！Dessert'",
+      "cards: 'Happy Anniversary！！2023' → 'Happy Anniversary！！Stamp' vs 'Happy Anniversary！！Dessert'",
+      "cards: 'まだ何も知らない' → '我还一无所知' vs '尚且一无所知'",
+      "cards: '仲間の存在' → '拥有伙伴的意义' vs '伙伴的意义'",
+      "cards: '時には穏やかな時間を' → '偶尔也要享受平静的时间' vs '偶尔享受悠闲的时光'"
+    ],
+    "built_at": "2026-06-28T15:57:26+00:00",
+    "output": "E:\\GithubRepos\\pjsk-i18n-mod\\i18n\\ui\\plain-text.json",
+    "entry_count": 3440
+  }
 }

@@ -11,6 +11,8 @@ from typing import Any
 class SourcesLock:
     cn_wordings_url: str
     jp_wordings_url: str
+    cn_master_base: str
+    jp_master_base: str
     locale: str = "zh-Hans"
     description: str = ""
 
@@ -20,6 +22,14 @@ class SourcesLock:
         return cls(
             cn_wordings_url=raw["cn_wordings_url"],
             jp_wordings_url=raw["jp_wordings_url"],
+            cn_master_base=raw.get(
+                "cn_master_base",
+                "https://sekai-world.github.io/sekai-master-db-cn-diff",
+            ),
+            jp_master_base=raw.get(
+                "jp_master_base",
+                "https://sekai-world.github.io/sekai-master-db-diff",
+            ),
             locale=raw.get("locale", "zh-Hans"),
             description=raw.get("description", ""),
         )

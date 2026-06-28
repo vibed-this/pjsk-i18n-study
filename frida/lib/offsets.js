@@ -12,6 +12,8 @@ const OFFSETS = {
     CustomTextMesh_UpdateWordingText: 0x4F2B2EC,
     CustomTextMesh_SetText:           0x4F27530,  // CustomTextMesh.SetText（IDA 入口）
     CustomTextMesh_SetText_slot:      0x4F2B590,  // ICustomText.SetText slot — UpdateWordingText tail-call 目标
+    CustomText_SetText_slot:          0x4F2B1B4,  // CustomText.SetText slot（legacy Unity Text）
+    CustomText_SetWordingText:        0x4F2B02C,  // CustomText.SetWordingText(string key)
     WordingManager_Get:               0x60241BC,  // 静态包装器（tail-call，Frida onLeave 不可靠）
     WordingManager_GetImpl:           0x60282AC,  // Get(string key) 实现体
     WordingManager_GetFormat:         0x602F054,  // GetFormat(key, args)

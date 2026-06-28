@@ -1,6 +1,8 @@
 {
   "locale": "zh-Hans",
-  "description": "Pinned Sekai-World master diff URLs for UI wordings build",
+  "description": "Pinned Sekai-World master diff URLs for UI wordings and plain-text build",
   "cn_wordings_url": "https://sekai-world.github.io/sekai-master-db-cn-diff/wordings.json",
-  "jp_wordings_url": "https://sekai-world.github.io/sekai-master-db-diff/wordings.json"
+  "jp_wordings_url": "https://sekai-world.github.io/sekai-master-db-diff/wordings.json",
+  "cn_master_base": "https://sekai-world.github.io/sekai-master-db-cn-diff",
+  "jp_master_base": "https://sekai-world.github.io/sekai-master-db-diff"
 }

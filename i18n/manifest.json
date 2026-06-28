@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-28T15:46:43+00:00",
+  "built_at": "2026-06-28T15:57:26+00:00",
   "locale": "zh-Hans",
   "target_client": "jp",
   "sources": {
@@ -11,7 +11,10 @@
   "outputs": {
     "ui_wordings": "i18n/ui/wordings.json",
     "ui_wordings_sha256": "a0b552101eaaa5077662090dcc4f3d3ee3c30bc8065b3cffabf49d1a55be4ec3",
-    "entry_count": 4838
+    "ui_plain_text": "i18n/ui/plain-text.json",
+    "ui_plain_text_sha256": "bfe1ace29b0f4248262f572c1c6b5351a590a3a763048ce65dc0e717bfc31fc4",
+    "entry_count": 4838,
+    "plain_text_count": 3440
   },
-  "notes": "Runtime lookup: wordingKey → zh for WordingManager.Get on JP client"
+  "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText)"
 }

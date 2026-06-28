@@ -33,7 +33,7 @@
 
 - [ ] **国服词表 `intercept` E2E**：`UI_MODE=cn`，样本 `WORD_DECIDE`→确定、`WORD_CANCEL`→取消（游戏就绪后）
 - [ ] **Master 明文 UI 补测**：曲名列表/角色名等（预期当前仍为日文，验证静态分析）
-- [ ] **`UI_MODE=cn` + `SetText` 明文替换**：`intercept.js` 去掉 cn 早退 + Master 映射（见 hook-strategy §未覆盖）
+- [ ] **`UI_MODE=cn` + `SetText` E2E**：真机验证角色名/卡片文案等 Master 明文（游戏就绪后）
 - [ ] **主界面菜单 `intercept`**：非剧情 dialog 的菜单按钮应显示简中
 - [ ] **主界面 `monitor` 补测**：`TMP_Text.set_text` 在主界面调用与读串
 - [ ] 确认设备 `versionName` 与本地 `apk/`、`offsets.js` 一致
@@ -64,7 +64,8 @@
 - [x] **i18n-tools**：`pjsk-i18n fetch/build` → `i18n/ui/wordings.json` + `manifest.json` + `gap-report.json`
 - [x] **Frida 接入**：`run.py` 注入 `UI_WORDINGS`；`intercept.js` key → zh
 - [ ] **真机 E2E**（P0，游戏下载后）
-- [ ] **Master 明文映射**：从 CN diff 拉 `music.json` / `gameCharacters.json` 等，供 `SetText` 按原文 lookup
+- [x] **Master 明文映射**：`pjsk-i18n build` → `i18n/ui/plain-text.json`（3440 jp→zh，musics/characters/cards/vocals/profiles）
+- [x] **`intercept.js` cn + SetText**：`UI_PLAIN_TEXT` 明文 lookup；`CustomText.SetText(slot)` Hook
 - [ ] `overrides/ui.yaml`：`MSG_STARTAPP_*`、日服独有 306 key（见 `i18n/reports/gap-report.json`）
 - [ ] 剧情：**scenario** JSON 对齐（`sekai-assets-updater` `REGION=CN`），独立于 UI 词表
 - [ ] 翻译包热更新路径（manifest checksum 已有）
