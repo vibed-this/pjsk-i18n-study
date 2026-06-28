@@ -18,7 +18,11 @@ const CFG = Object.assign({
     INTERCEPT: { TMP: true, STORY: true, UI: true },
 }, typeof CFG_OVERRIDE !== 'undefined' ? CFG_OVERRIDE : {});
 
-const stats = { tmp: 0, story: 0, ui: 0, uiKey: 0, intercept: 0, skip: 0, dual: 0 };
+const stats = {
+    tmp: 0, story: 0, ui: 0, uiKey: 0,
+    wordingGet: 0, wordingFmt: 0, uiSetText: 0,
+    intercept: 0, skip: 0, dual: 0,
+};
 
 function lookupZh(jp) {
     if (!jp) return CFG.DUAL_PLACEHOLDER;
@@ -74,6 +78,30 @@ function applyStoryDual(jp) {
     if (!rep || rep.isNull()) return { changed: false, text: jp };
     stats.dual++;
     return { changed: true, text: next, ptr: rep };
+}
+
+function prefixEnterArg(args, index, hookName, statBump) {
+    if (statBump) statBump();
+    if (CFG.STORY_MODE === 'dual') return;
+    const orig = readStr(args[index]);
+    if (!orig) return;
+    if (shouldSkipPrefix(orig)) { stats.skip++; return; }
+    const next = prefixed(orig);
+    const hit = replaceArg(args[index], next);
+    if (hit.ok) args[index] = hit.ptr;
+    if (stats.intercept < CFG.MAX_LOG) logIntercept(hookName, orig, next, hit.ok);
+}
+
+function prefixLeaveRetval(retval, hookName, statBump) {
+    if (statBump) statBump();
+    if (CFG.STORY_MODE === 'dual') return;
+    const orig = readStr(retval);
+    if (!orig) return;
+    if (shouldSkipPrefix(orig)) { stats.skip++; return; }
+    const next = prefixed(orig);
+    const hit = replaceArg(retval, next);
+    if (hit.ok) retval.replace(hit.ptr);
+    if (stats.intercept < CFG.MAX_LOG) logIntercept(hookName, orig, next, hit.ok);
 }
 
 function applyStoryPrefix(jp) {
@@ -157,18 +185,30 @@ function install() {
     }
 
     if (CFG.INTERCEPT.UI) {
-        hookAt('CustomTextMesh.UpdateWordingText', OFFSETS.CustomTextMesh_UpdateWordingText, {
-            onLeave(retval) {
-                stats.ui++;
-                if (CFG.STORY_MODE === 'dual') return;
-                const orig = readStr(retval);
-                if (!orig) return;
-                if (shouldSkipPrefix(orig)) { stats.skip++; return; }
-                const next = prefixed(orig);
-                const hit = replaceArg(retval, next);
-                if (hit.ok) retval.replace(hit.ptr);
-                if (stats.ui <= CFG.MAX_LOG) logIntercept('UpdateWordingText', orig, next, hit.ok);
+        // 词表 UI：SetWordingText 只存 key → Get/GetFormat → CustomTextMesh.SetText（vtable）。
+        // tmp=0 正常：不经 TMP_Text.set_text；UpdateWordingText onLeave 亦不可用。
+        hookAt('CustomTextMesh.SetText', OFFSETS.CustomTextMesh_SetText, {
+            onEnter(args) {
+                prefixEnterArg(args, 1, 'CustomTextMesh.SetText', () => { stats.uiSetText++; });
             },
+        });
+        hookAt('CustomTextMesh.SetText(slot)', OFFSETS.CustomTextMesh_SetText_slot, {
+            onEnter(args) {
+                prefixEnterArg(args, 1, 'CustomTextMesh.SetText(slot)', () => { stats.uiSetText++; });
+            },
+        });
+        hookAt('WordingManager.Get', OFFSETS.WordingManager_GetImpl, {
+            onLeave(retval) {
+                prefixLeaveRetval(retval, 'WordingManager.Get', () => { stats.wordingGet++; });
+            },
+        });
+        hookAt('WordingManager.GetFormat', OFFSETS.WordingManager_GetFormat, {
+            onLeave(retval) {
+                prefixLeaveRetval(retval, 'WordingManager.GetFormat', () => { stats.wordingFmt++; });
+            },
+        });
+        hookAt('CustomTextMesh.UpdateWordingText', OFFSETS.CustomTextMesh_UpdateWordingText, {
+            onEnter() { stats.ui++; },
         });
     }
 

@@ -9,7 +9,7 @@
 
 ## 当前焦点
 
-**Frida 剧情拦截 E2E 已通过** — 下一步：主界面/UI 词表 `intercept` 补测、`TMP_Text.set_text` 行为确认，然后启动 Zygisk 封装与翻译数据管线。
+**Frida 剧情 + UI 词表 intercept E2E 已通过** — 下一步：主界面菜单补测、`TMP_Text.set_text` 行为确认，然后 demo 翻译表 + Zygisk 封装。
 
 ---
 
@@ -19,16 +19,18 @@
 - [ ] **主界面 `monitor` 补测**：确认 `TMP_Text.set_text` 在主界面有调用且能读出日文正文（加载阶段已证实为 0 次属正常）
 - [x] **剧情 `SetWordsInfo` 验证**：`talk=1`，成功读到 `name=ミク` `cid=21`、正文含换行（见 notes/frida.md §4）
 - [x] **剧情 `intercept` 验证**：`SetWordsInfo` 替换可见；样本 `name=ミク` `cid=21`，正文含换行（见 notes/frida.md §5）
-- [ ] **主界面 / UI 词表 `intercept` 补测**：确认 `UpdateWordingText` / `TMP_Text.set_text` 替换在菜单按钮可见（intercept 末段 `tmp=12`）
+- [x] **UI 词表 `intercept` 验证**：`WordingManager.Get` `onLeave` 可见替换；样本 `WORD_DECIDE`/`WORD_CANCEL`/`MSG_LIVE_SKIP_BODY`（见 notes/frida.md §6）
+- [ ] **主界面菜单 `intercept` 补测**：进主菜单后确认菜单按钮 `[TEST]`（非剧情 dialog）
 - [ ] **调查剧情早期 `TMP_Text.set_text` 为 0**：显示经 `SetWordsInfo` 直达；后续 UI 操作后 `tmp` 会增长
 - [~] **词表 key 对照**：静态链路已理清（见 [text-rendering.md](notes/text-rendering.md) §词表）；`WORD_*` / 部分 `MSG_*` 已在 sekai-master-db-diff 对照
   - [x] `WORD_DECIDE` / `WORD_CANCEL` / `MSG_MOVIE_SKIP_BODY` → 公开库可查
   - [x] `MSG_STARTAPP_*` 静态来源 — `TitleController` 登录链硬编码；见 [text-rendering.md](notes/text-rendering.md) §4
   - [x] `MSG_STARTAPP_*` 日文 value — APK 内置引导词表已确认（§5）；非 Master 表
-- [ ] **修正字符串读取策略**（基于加载阶段 monitor 结论）：
-  - `SetWordingText` `onEnter` 读 key — 已验证可用，保留
-  - `UpdateWordingText` `onLeave` 读返回值 — 已证实不可靠（`wordingText` 计数增加但 `readStr` 全 null），改 Hook `TMP_Text.set_text` 或 IDA 追 `sub_60282AC` 实现体
-  - 放弃在 `WordingManager.Get` 包装器上用 `onLeave`
+- [x] **UI 拦截/读取策略确定**：
+  - `SetWordingText` `onEnter` 读 key — 保留
+  - `WordingManager.Get` **实现体** `0x60282AC` `onLeave` — 读/替换日文 ✅
+  - `CustomTextMesh.SetText` / `SetText(slot)` — 显示前兜底
+  - 放弃：`UpdateWordingText onLeave`、包装器 `0x60241BC` onLeave（tail-call）
 
 ---
 
@@ -106,6 +108,7 @@
 - [x] 剧情 `TalkWindow.SetWordsInfo` 文本读取（`il2cpp_string_*`，`onEnter` X2/X3）
 - [x] 剧情 UI 词表 key：`WORD_DECIDE`、`WORD_CANCEL`、`MSG_MOVIE_SKIP_BODY`
 - [x] 剧情 `intercept` 可见替换：角色名 + 对话正文均出现 `[TEST]` 前缀
+- [x] UI 词表 `intercept`：`WordingManager.Get` 替换 `決定`/`キャンセル`/`ライブをスキップ…` 可见
 
 ---
 

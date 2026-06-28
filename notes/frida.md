@@ -109,6 +109,29 @@
 
 **结论**：剧情翻译 Hook 点 **`SetWordsInfo` 已完成 read + intercept E2E 验证**，可作为 Zygisk 剧情层实现依据。
 
+### 6. intercept UI 词表验证（2026-06-28，base=`0x7530bb4000`）
+
+脚本：`frida/run.py intercept`。UI 路径 Hook：
+
+| 函数 | 偏移 | 作用 |
+|------|------|------|
+| `WordingManager.Get`（实现体） | `0x60282AC` | `onLeave` 替换 lookup 返回值 ✅ |
+| `WordingManager.GetFormat` | `0x602F054` | 带占位符文案 |
+| `CustomTextMesh.SetText` | `0x4F27530` | 显示前改 `X1` |
+| `CustomTextMesh.SetText`（slot） | `0x4F2B590` | `UpdateWordingText` tail-call 目标 |
+
+**无效路径（已弃用）**：`UpdateWordingText onLeave`（tail-call，读返回值全 null）；词表 UI 早期 `TMP_Text.set_text` 计数为 0 属正常。
+
+**样本**（剧情内跳过 dialog，屏幕可见 `[TEST]` 前缀）：
+
+| key | 原文 | 替换 |
+|-----|------|------|
+| `WORD_DECIDE` | 決定 | `[TEST] 決定` |
+| `WORD_CANCEL` | キャンセル | `[TEST] キャンセル` |
+| `MSG_LIVE_SKIP_BODY` | ライブをスキップしますか？ | `[TEST] ライブをスキップしますか？` |
+
+**结论**：UI 词表拦截 **`WordingManager.Get` 实现体 `onLeave`** 即可完成可见替换；Zygisk UI 层优先对齐此点，辅以 `CustomTextMesh.SetText` 兜底。
+
 ## 结论
 
 | 项 | 状态 |
@@ -116,8 +139,8 @@
 | Frida 原型环境（真机 gadget） | ✅ 可用 |
 | IDA 偏移在真机运行时有效 | ✅ 已验证（3/3 安装成功） |
 | Hook 点有实际调用 | ✅ UI + 剧情均已确认 |
-| 文本内容抓取 | ✅ 剧情 `SetWordsInfo`、UI `SetWordingText` key；⏳ `UpdateWordingText` 正文、`TMP_Text.set_text` 待补 |
-| 翻译替换原型 | ✅ 剧情 `SetWordsInfo` 可见替换；⏳ UI 词表待补测 |
+| 文本内容抓取 | ✅ 剧情 `SetWordsInfo`；UI `SetWordingText` key + `WordingManager.Get` 日文 |
+| 翻译替换原型 | ✅ 剧情 `SetWordsInfo` + UI `WordingManager.Get` 可见替换 |
 | 模拟器 frida-server | ❌ 搁置 |
 
 ### 推荐联调流程
