@@ -14,6 +14,7 @@ frida/
 ├── scripts/
 │   ├── intercept.js    # 拦截演示（屏幕可见 + 终端输出）
 │   ├── monitor.js      # 只读监控
+│   ├── font.js         # 字体加载探测（SetupBuiltinFontAsset）
 │   └── probe.js        # 验证 il2cpp 加载与偏移
 └── gadget/             # APK 补丁与安装
 ```
@@ -35,6 +36,9 @@ uv run python frida/run.py intercept
 
 # 只读监控
 uv run python frida/run.py monitor --duration 90
+
+# 字体加载探测（冷启动触发 SetupBuiltinFontAsset）
+uv run python frida/run.py font --duration 180
 
 # 验证 il2cpp 与偏移（spawn 模式）
 uv run python frida/run.py probe

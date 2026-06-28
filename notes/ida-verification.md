@@ -81,7 +81,27 @@ ARM64 参数：
 | IDA 函数入口 | `0x61028AC`（完全吻合） |
 | 大小 | `0x27C` |
 
-行为：通过资源加载函数取得 `TMP_FontAsset`，写入 `[this+0x28/0x30/0x40]`，操作 fallback 表（`[font+0x138]`），调用 `ClearFallbackFontAsset`。调用者为主初始化流程（`sub_6029F8C`）。
+行为：通过资源加载函数取得 `TMP_FontAsset`，写入 `FontAssetManager` 字段并填充 fallback 表（`[font+0x138]`，List：`+0x10` items、`+0x18` size）。调用者为主初始化流程（`sub_6029F8C`）。
+
+`FontAssetManager` 字段（6.5.5，本函数内可见）：
+
+| 偏移 | 用途（推断） |
+|------|----------------|
+| `+0x20` | 主字体 A（接收 fallback） |
+| `+0x28` | 加载资产 A |
+| `+0x30` | fallback 源 A |
+| `+0x38` | 主字体 B |
+| `+0x40` | 加载资产 B |
+| `+0x48` | fallback 源 B |
+
+### `Sekai_FontAssetManager_ClearFallbackFontAsset` — 清空 fallback 表
+
+| 项 | 值 |
+|----|-----|
+| Il2CppDumper / IDA | `0x61024F8` |
+| 大小 | `0x74` |
+
+行为：`X0` = manager，`X1` = `TMP_FontAsset`；读取 `[font+0x138]` 的 List，将 `size` 置 0（`SetupBuiltinFontAsset` 在写入新 fallback 前调用）。
 
 ### `TMPro_TMP_Text_set_text` — TMP 底层兜底
 

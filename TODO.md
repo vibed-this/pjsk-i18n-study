@@ -9,34 +9,27 @@
 
 ## 当前焦点
 
-**游戏 APK 下载中，设备已断开** — 阻塞项：真机 Frida 联调。
+**CJK 字体注入（P5）** — 真机已验证：`UI_MODE=cn` 词表替换成功（`wordingGet≈388`），但简中大量 tofu；剧情 demo 仅 3 条，全量 story 暂缓。
 
-**静态分析结论（2026-06-28）**：当前两路 Hook（`WordingManager.Get` + `TalkWindow.SetWordsInfo`）只覆盖 **词表 key 类 UI** 与 **剧情明文**。未覆盖的 UI 主要来自：
+**下一步（字体）**：
 
-1. **Master 表直出明文**（曲名/角色名/卡片技能等）→ `CustomTextMesh.SetText(slot)` 直写，不经 `Get`
-2. **`UI_MODE=cn` 下 `SetText` Hook 被跳过**（`intercept.js` `prefixEnterArg` 早退）→ 明文显示层无替换
-3. **`CustomText`**（legacy Unity Text，dump 约 140 处）→ 自有 `SetText` slot `0x4F2B1B4`，未 Hook
-4. **数据缺口**：306 日服独有 key、`MSG_STARTAPP_*` 不在 CN diff
+1. 用 `sekai-assets-updater` `REGION=CN` 解出国服 `TMP_FontAsset` bundle（与 JP 同版本），作 fallback 源
+2. Frida/IDA 验证 `FontAssetManager.SetupBuiltinFontAsset` @ `0x61028AC` 调用时机与 fallback 表字段
+3. 在 `SetupBuiltinFontAsset` onLeave 向 `_builtInFont*` 的 `fallbackFontAssetTable` 注入国服 CJK 子集（或整包替换）
+4. 补测 legacy `CustomText`（Unity `Text`，约 140 处）是否仍 tofu
 
-详见 [notes/text-rendering.md](notes/text-rendering.md) §UI 覆盖分层、[notes/hook-strategy.md](notes/hook-strategy.md) §未覆盖 UI 路径。
-
-**下载完成后第一件事**：
-
-1. 确认 `versionName` 与 `offsets.js`（6.5.5）一致 → `probe`
-2. `intercept` E2E：词表 UI（确定/取消）+ 曲名/角色名等 Master 明文是否仍为日文
-3. 若词表 OK、明文仍日文：在 `intercept.js` 为 `UI_MODE=cn` 启用 `SetText` 明文替换（需扩展 Master 映射表）
-4. 核对 `Get` 的 `args[0]` 与 `intercept` 日志
+详见 [notes/hook-strategy.md](notes/hook-strategy.md) §字体、[notes/ida-verification.md](notes/ida-verification.md) §SetupBuiltinFontAsset。
 
 ---
 
 ## P0 — Frida 真机验证（阻塞后续）
 
-- [ ] **国服词表 `intercept` E2E**：`UI_MODE=cn`，样本 `WORD_DECIDE`→确定、`WORD_CANCEL`→取消（游戏就绪后）
-- [ ] **Master 明文 UI 补测**：曲名列表/角色名等（预期当前仍为日文，验证静态分析）
-- [ ] **`UI_MODE=cn` + `SetText` E2E**：真机验证角色名/卡片文案等 Master 明文（游戏就绪后）
-- [ ] **主界面菜单 `intercept`**：非剧情 dialog 的菜单按钮应显示简中
+- [x] **国服词表 `intercept` E2E**：`UI_MODE=cn`，按钮/对话框简中命中；**字体 tofu**（待 P5）
+- [ ] **Master 明文 UI 补测**：曲名/角色界面，`uiPlain` 是否 > 0
+- [ ] **`UI_MODE=cn` + `SetText` E2E**：`mode=cn-plain` 命中
+- [x] **主界面菜单 `intercept`**：非剧情 dialog 按钮已简中（字体缺字）
 - [ ] **主界面 `monitor` 补测**：`TMP_Text.set_text` 在主界面调用与读串
-- [ ] 确认设备 `versionName` 与本地 `apk/`、`offsets.js` 一致
+- [x] **probe 偏移**：`base=0x7530bb4000`，11/11 Hook 可执行（6.5.5）
 - [x] **剧情 `SetWordsInfo` 验证**（前缀模式，见 notes/frida.md §4–5）
 - [x] **UI 词表 `intercept` 验证**（`[TEST]` 前缀模式，见 notes/frida.md §6）
 - [x] **UI 拦截策略确定**：`WordingManager.GetImpl` `onLeave` + key lookup
@@ -67,7 +60,7 @@
 - [x] **Master 明文映射**：`pjsk-i18n build` → `i18n/ui/plain-text.json`（3440 jp→zh，musics/characters/cards/vocals/profiles）
 - [x] **`intercept.js` cn + SetText**：`UI_PLAIN_TEXT` 明文 lookup；`CustomText.SetText(slot)` Hook
 - [ ] `overrides/ui.yaml`：`MSG_STARTAPP_*`、日服独有 306 key（见 `i18n/reports/gap-report.json`）
-- [~] **剧情国服挪用**：`pjsk-i18n story-inventory` + `story-build` → `i18n/story/text.json`；Frida `STORY_MODE=cn` 已接入；**待** `cache/scenario/` 全量 AssetBundle + 真机 E2E
+- [~] **剧情国服挪用**：管线 + Frida `STORY_MODE=cn` 已接入；全量构建 **搁置**（需 `cache/scenario/`，见下）
 - [x] 剧情 gap 清单：`story-inventory` → common=3882 / jp_only=476（`i18n-data/cache/scenario-inventory.json`）
 - [ ] 翻译包热更新路径（manifest checksum 已有）
 
@@ -81,11 +74,14 @@
 
 ---
 
-## P5 — 字体注入
+## P5 — 字体注入（当前焦点）
 
-- [ ] `SetupBuiltinFontAsset` 调用时机验证
-- [ ] CJK TMP_FontAsset + fallback 注入
-- [ ] 真机无 tofu（国服词表 E2E 后优先）
+- [ ] 国服 `TMP_FontAsset` 提取：`sekai-assets-updater` `REGION=CN`，过滤 `font/` 相关 bundle（与 JP 6.5.5 对齐）
+- [ ] 对比 JP/CN 字体 bundle 名与 `FontAssetManager` 字段（`_builtInFontDB/EB`、`_baseFontDB` 等）
+- [~] `SetupBuiltinFontAsset` @ `0x61028AC`：`frida/run.py font` 探测脚本已加；**待**真机跑 leave 日志确认 fallbackSize
+- [ ] fallback 注入原型：向 `[font+0x138]` fallback 表追加国服 CJK `TMP_FontAsset`（Zygisk 或 Frida）
+- [ ] legacy `CustomText` / Unity `Text` 缺字路径（若 fallback 后仍 tofu）
+- [ ] 真机：`UI_MODE=cn` 下按钮/剧情无 tofu
 
 ---
 
@@ -108,7 +104,7 @@
 
 ## 搁置 / 阻塞
 
-- [-] **当前阻塞**：游戏下载中，无设备连接
+- [-] **剧情全量构建**：需 `sekai-assets-updater` JP+CN scenario → `cache/scenario/`；开场剧情已不可重进，不阻塞字体线
 - [-] 模拟器 frida-server；Master 缓存解密；内置词表提取脚本
 
 ---
@@ -129,4 +125,7 @@ uv run python frida/run.py intercept --duration 120
 
 uv run python frida/run.py monitor --duration 120
 uv run python frida/run.py probe
+
+# 字体加载探测
+uv run python frida/run.py font --duration 180
 ```

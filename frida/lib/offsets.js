@@ -17,4 +17,20 @@ const OFFSETS = {
     WordingManager_Get:               0x60241BC,  // 静态包装器（tail-call，Frida onLeave 不可靠）
     WordingManager_GetImpl:           0x60282AC,  // Get(string key) 实现体
     WordingManager_GetFormat:         0x602F054,  // GetFormat(key, args)
+    FontAssetManager_SetupBuiltinFontAsset: 0x61028AC,
+    FontAssetManager_ClearFallbackFontAsset: 0x61024F8,  // 清空 TMP_FontAsset.fallbackFontAssetTable
 };
+
+// FontAssetManager @ 6.5.5（IDA SetupBuiltinFontAsset 反汇编）
+const FONT_MANAGER_FIELDS = [
+    { off: 0x20, label: 'baseA' },
+    { off: 0x28, label: 'loadedA' },
+    { off: 0x30, label: 'fallbackSrcA' },
+    { off: 0x38, label: 'baseB' },
+    { off: 0x40, label: 'loadedB' },
+    { off: 0x48, label: 'fallbackSrcB' },
+];
+
+const TMP_FONT_FALLBACK_LIST = 0x138;
+const IL2CPP_LIST_ITEMS = 0x10;
+const IL2CPP_LIST_SIZE = 0x18;

@@ -46,6 +46,65 @@ function hookAt(name, offset, callbacks) {
     Interceptor.attach(addr, callbacks);
 }
 
+function readPtr(base, offset) {
+    if (!base || base.isNull()) return null;
+    try {
+        const p = base.add(offset).readPointer();
+        return p && !p.isNull() ? p : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function readUnityObjectName(obj) {
+    if (!obj || obj.isNull()) return null;
+    const candidates = [0x60, 0x58, 0x68, 0x50, 0x48];
+    for (let i = 0; i < candidates.length; i++) {
+        const namePtr = readPtr(obj, candidates[i]);
+        const s = readStr(namePtr);
+        if (s && s.length > 0 && s.length < 160) return s;
+    }
+    return null;
+}
+
+function readIl2CppListSize(list) {
+    if (!list || list.isNull()) return 0;
+    try {
+        const n = list.add(IL2CPP_LIST_SIZE).readS32();
+        return n >= 0 && n < 10000 ? n : 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
+function describeFallbackList(fontAsset) {
+    const list = readPtr(fontAsset, TMP_FONT_FALLBACK_LIST);
+    if (!list) return { list: null, size: 0 };
+    return { list: list.toString(), size: readIl2CppListSize(list) };
+}
+
+function describeTmpFontAsset(ptr) {
+    if (!ptr || ptr.isNull()) return null;
+    const fb = describeFallbackList(ptr);
+    return {
+        ptr: ptr.toString(),
+        name: readUnityObjectName(ptr),
+        fallback: fb,
+    };
+}
+
+function describeFontManager(mgr) {
+    if (!mgr || mgr.isNull()) return null;
+    const slots = {};
+    const fields = typeof FONT_MANAGER_FIELDS !== 'undefined' ? FONT_MANAGER_FIELDS : [];
+    for (let i = 0; i < fields.length; i++) {
+        const f = fields[i];
+        const asset = readPtr(mgr, f.off);
+        slots[f.label] = describeTmpFontAsset(asset);
+    }
+    return { mgr: mgr.toString(), slots: slots };
+}
+
 function waitForIl2Cpp(timeoutMs) {
     const deadline = Date.now() + (timeoutMs || 180000);
     return new Promise((resolve, reject) => {

@@ -28,7 +28,7 @@ UI_WORDINGS_PATH = REPO_ROOT / "i18n" / "ui" / "wordings.json"
 UI_PLAIN_TEXT_PATH = REPO_ROOT / "i18n" / "ui" / "plain-text.json"
 STORY_TEXT_PATH = REPO_ROOT / "i18n" / "story" / "text.json"
 
-MODES = ("intercept", "monitor", "probe")
+MODES = ("intercept", "monitor", "probe", "font")
 
 
 def load_json_string_map(path: Path) -> dict[str, str] | None:
@@ -217,6 +217,79 @@ def run_intercept(args: argparse.Namespace) -> int:
     return 0 if ok or with_text else 1
 
 
+def fmt_font(p: dict) -> str:
+    hook = p.get("hook", "?")
+    phase = p.get("phase", "?")
+    lines = [f"── font [{phase}] {hook}"]
+    if p.get("mgr"):
+        lines.append(f"   mgr: {p['mgr']}")
+    font = p.get("font")
+    if font:
+        lines.append(f"   font: {font.get('ptr')} name={font.get('name')!r} fallback={font.get('fallback')}")
+    for key in ("before", "after"):
+        block = p.get(key)
+        if not block or not block.get("slots"):
+            continue
+        lines.append(f"   {key}:")
+        for label, info in block["slots"].items():
+            if not info:
+                lines.append(f"      {label}: <null>")
+                continue
+            fb = info.get("fallback") or {}
+            lines.append(
+                f"      {label}: {info.get('ptr')} name={info.get('name')!r} "
+                f"fallbackSize={fb.get('size', 0)}"
+            )
+    return "\n".join(lines)
+
+
+def run_font(args: argparse.Namespace) -> int:
+    js = load_script("font")
+    events: list[dict] = []
+
+    def on_message(message, _data):
+        if message.get("type") != "send":
+            return
+        p = message["payload"]
+        events.append(p)
+        if args.json:
+            print(json.dumps(p, ensure_ascii=False), flush=True)
+        elif p.get("event") == "font":
+            print(fmt_font(p), flush=True)
+        elif p.get("event") in ("ready", "stats", "hook", "il2cpp", "error"):
+            print(json.dumps(p, ensure_ascii=False), flush=True)
+
+    print("=" * 60, flush=True)
+    print("字体探测 — SetupBuiltinFontAsset / ClearFallbackFontAsset", flush=True)
+    print("冷启动或重进游戏以触发字体加载；leave 后看 fallbackSize", flush=True)
+    print("=" * 60, flush=True)
+
+    device = get_device()
+    session, spawn_pid = attach(device, args.attach)
+    script = session.create_script(js)
+    script.on("message", on_message)
+    script.on("message", _frida_error_handler)
+    script.load()
+    if spawn_pid is not None:
+        device.resume(spawn_pid)
+
+    print(f"[*] font probe {args.duration}s…", flush=True)
+    try:
+        time.sleep(args.duration)
+    except KeyboardInterrupt:
+        print("\n[*] interrupted", flush=True)
+    finally:
+        session.detach()
+
+    font_events = [e for e in events if e.get("event") == "font"]
+    setup_leave = [e for e in font_events if e.get("hook") == "SetupBuiltinFontAsset" and e.get("phase") == "leave"]
+    print(
+        f"[*] done: {len(events)} events, font={len(font_events)}, setupLeave={len(setup_leave)}",
+        flush=True,
+    )
+    return 0 if font_events or any(e.get("event") == "ready" for e in events) else 1
+
+
 def run_monitor(args: argparse.Namespace) -> int:
     js = load_script("monitor")
     events: list[dict] = []
@@ -334,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.mode in ("intercept", "monitor") and not args.spawn:
+    if args.mode in ("intercept", "monitor", "font") and not args.spawn:
         args.attach = True
     if args.mode == "probe" and not args.attach:
         args.attach = False
@@ -343,6 +416,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_intercept(args)
     if args.mode == "monitor":
         return run_monitor(args)
+    if args.mode == "font":
+        return run_font(args)
     return run_probe(args)
 
 
