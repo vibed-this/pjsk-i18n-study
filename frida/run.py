@@ -26,6 +26,7 @@ LIB = ROOT / "lib"
 SCRIPTS = ROOT / "scripts"
 UI_WORDINGS_PATH = REPO_ROOT / "i18n" / "ui" / "wordings.json"
 UI_PLAIN_TEXT_PATH = REPO_ROOT / "i18n" / "ui" / "plain-text.json"
+STORY_TEXT_PATH = REPO_ROOT / "i18n" / "story" / "text.json"
 
 MODES = ("intercept", "monitor", "probe")
 
@@ -47,6 +48,10 @@ def load_ui_plain_text() -> dict[str, str] | None:
     return load_json_string_map(UI_PLAIN_TEXT_PATH)
 
 
+def load_story_text() -> dict[str, str] | None:
+    return load_json_string_map(STORY_TEXT_PATH)
+
+
 def load_script(mode: str, cfg_override: dict | None = None) -> str:
     parts = [
         (LIB / "offsets.js").read_text(encoding="utf-8"),
@@ -58,6 +63,9 @@ def load_script(mode: str, cfg_override: dict | None = None) -> str:
     plain = load_ui_plain_text()
     if plain:
         parts.append(f"const UI_PLAIN_TEXT = {json.dumps(plain, ensure_ascii=False)};\n")
+    story = load_story_text()
+    if story:
+        parts.append(f"const STORY_TEXT = {json.dumps(story, ensure_ascii=False)};\n")
     if cfg_override:
         parts.append(f"const CFG_OVERRIDE = {json.dumps(cfg_override, ensure_ascii=False)};\n")
     parts.append((SCRIPTS / f"{mode}.js").read_text(encoding="utf-8"))
@@ -72,8 +80,9 @@ def intercept_cfg(args: argparse.Namespace) -> dict:
             "INTERCEPT": {"TMP": False, "STORY": True, "UI": False},
         }
     ui_mode = "cn" if load_ui_wordings() else "prefix"
-    cfg: dict = {"STORY_MODE": "prefix", "UI_MODE": ui_mode}
-    if ui_mode == "prefix":
+    story_mode = "cn" if load_story_text() else "prefix"
+    cfg: dict = {"STORY_MODE": story_mode, "UI_MODE": ui_mode}
+    if ui_mode == "prefix" or story_mode == "prefix":
         cfg["PREFIX"] = args.prefix
     return cfg
 
@@ -156,6 +165,7 @@ def run_intercept(args: argparse.Namespace) -> int:
             print(
                 f"[*] ready storyMode={p.get('storyMode')!r} uiMode={p.get('uiMode')!r} "
                 f"uiWordings={p.get('uiWordings')} uiPlainText={p.get('uiPlainText')} "
+                f"storyText={p.get('storyText')} "
                 f"demoKeys={p.get('demoKeys')}",
                 flush=True,
             )
@@ -169,9 +179,16 @@ def run_intercept(args: argparse.Namespace) -> int:
         else:
             w = load_ui_wordings()
             p = load_ui_plain_text()
-            if w:
-                extra = f"；plain-text {len(p)} 条" if p else ""
-                print(f"UI 国服词表 — {len(w)} keys；Get 按 key + SetText 按原文{extra}", flush=True)
+            s = load_story_text()
+            if w or s:
+                parts_msg = []
+                if w:
+                    parts_msg.append(f"UI {len(w)} keys")
+                if p:
+                    parts_msg.append(f"plain {len(p)}")
+                if s:
+                    parts_msg.append(f"story {len(s)}")
+                print(f"国服词表 — {' + '.join(parts_msg)}；SetWordsInfo 按日文明文", flush=True)
             else:
                 print("拦截演示 — 屏幕应出现前缀，终端同步打印（未找到 i18n/ui/wordings.json）", flush=True)
         print("=" * 60, flush=True)

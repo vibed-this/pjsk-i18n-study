@@ -21,3 +21,15 @@ MASTER_BASE_JP = "https://sekai-world.github.io/sekai-master-db-diff"
 
 CACHE_CN = CACHE_DIR / "cn-wordings.json"
 CACHE_JP = CACHE_DIR / "jp-wordings.json"
+
+CACHE_SCENARIO_JP = CACHE_DIR / "scenario" / "jp"
+CACHE_SCENARIO_CN = CACHE_DIR / "scenario" / "cn"
+CACHE_SCENARIO_INVENTORY = CACHE_DIR / "scenario-inventory.json"
+
+FIXTURE_SCENARIO_JP = I18N_DATA / "fixtures" / "scenario" / "jp"
+FIXTURE_SCENARIO_CN = I18N_DATA / "fixtures" / "scenario" / "cn"
+
+OUT_STORY = OUT_ROOT / "story"
+OUT_STORY_TEXT = OUT_STORY / "text.json"
+OUT_STORY_BY_SCENARIO = OUT_STORY / "by-scenario"
+OUT_STORY_GAP_REPORT = OUT_ROOT / "reports" / "story-gap-report.json"

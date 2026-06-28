@@ -1,0 +1,17 @@
+{
+  "ScenarioId": "demo_talk",
+  "Snippets": [
+    { "Index": 0, "Action": 1, "ReferenceIndex": 0 },
+    { "Index": 1, "Action": 1, "ReferenceIndex": 1 }
+  ],
+  "TalkData": [
+    {
+      "WindowDisplayName": "ミク",
+      "Body": "こんにちは。\nここに誰かが来るなんて、珍しいな"
+    },
+    {
+      "WindowDisplayName": "ミク",
+      "Body": "わたしは、初音ミク。\nキミの名前は？"
+    }
+  ]
+}

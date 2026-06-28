@@ -15,10 +15,14 @@ function uiPlainTextMap() {
     return (typeof UI_PLAIN_TEXT !== 'undefined' && UI_PLAIN_TEXT) ? UI_PLAIN_TEXT : {};
 }
 
+function storyTextMap() {
+    return (typeof STORY_TEXT !== 'undefined' && STORY_TEXT) ? STORY_TEXT : {};
+}
+
 const CFG = Object.assign({
     PREFIX: '[TEST] ',
     UI_MODE: 'prefix',  // 'cn' | 'prefix' — run.py sets 'cn' when wordings.json loaded
-    STORY_MODE: 'prefix',   // 'prefix' | 'dual'
+    STORY_MODE: 'prefix',   // 'prefix' | 'cn' | 'dual'
     DUAL_STYLE: 'plain',    // 'plain' | 'rich'
     DUAL_PLACEHOLDER: '译',
     DUAL_TAG: '[[',         // 译文行以 [[...]] 包裹；用开头检测防重复
@@ -29,7 +33,7 @@ const CFG = Object.assign({
 
 const stats = {
     tmp: 0, story: 0, ui: 0, uiKey: 0,
-    wordingGet: 0, wordingFmt: 0, uiSetText: 0, uiPlain: 0,
+    wordingGet: 0, wordingFmt: 0, uiSetText: 0, uiPlain: 0, storyCn: 0,
     intercept: 0, skip: 0, dual: 0,
 };
 
@@ -135,6 +139,13 @@ function lookupUiPlain(jp) {
     return null;
 }
 
+function lookupStoryZh(jp) {
+    if (!jp) return null;
+    const map = storyTextMap();
+    if (Object.prototype.hasOwnProperty.call(map, jp)) return map[jp];
+    return null;
+}
+
 function replaceRetvalZh(retval, zh, hookName, orig) {
     const hit = replaceArg(retval, zh);
     if (hit.ok) retval.replace(hit.ptr);
@@ -170,6 +181,16 @@ function applyStoryPrefix(jp) {
     const rep = makeStr(next);
     if (!rep || rep.isNull()) return { changed: false, text: jp };
     return { changed: true, text: next, ptr: rep };
+}
+
+function applyStoryCn(jp, field) {
+    if (!jp) return { changed: false, text: jp };
+    const zh = lookupStoryZh(jp);
+    if (!zh) return { changed: false, text: jp };
+    const rep = makeStr(zh);
+    if (!rep || rep.isNull()) return { changed: false, text: jp };
+    stats.storyCn++;
+    return { changed: true, text: zh, ptr: rep };
 }
 
 function install() {
@@ -222,20 +243,42 @@ function install() {
                     return;
                 }
 
-                if (name && !shouldSkipPrefix(name)) {
-                    const hit = applyStoryPrefix(name);
-                    newName = hit.text;
-                    if (hit.changed) args[2] = hit.ptr;
-                }
-                if (words && !shouldSkipPrefix(words)) {
-                    const hit = applyStoryPrefix(words);
-                    newWords = hit.text;
-                    if (hit.changed) args[3] = hit.ptr;
+                if (CFG.STORY_MODE === 'cn') {
+                    if (name) {
+                        const hit = applyStoryCn(name, 'name');
+                        newName = hit.text;
+                        if (hit.changed) args[2] = hit.ptr;
+                    }
+                    if (words) {
+                        const hit = applyStoryCn(words, 'body');
+                        newWords = hit.text;
+                        if (hit.changed) args[3] = hit.ptr;
+                    }
+                } else {
+                    if (name && !shouldSkipPrefix(name)) {
+                        const hit = applyStoryPrefix(name);
+                        newName = hit.text;
+                        if (hit.changed) args[2] = hit.ptr;
+                    }
+                    if (words && !shouldSkipPrefix(words)) {
+                        const hit = applyStoryPrefix(words);
+                        newWords = hit.text;
+                        if (hit.changed) args[3] = hit.ptr;
+                    }
                 }
 
                 if (stats.story <= CFG.MAX_LOG) {
-                    if (words) logIntercept('TalkWindow.SetWordsInfo', words, newWords, true, 'cid=' + cid);
-                    if (name) logCapture('STORY_NAME', { name: name, replaced: newName, cid: cid });
+                    const mode = CFG.STORY_MODE === 'cn' ? 'mode=cn' : '';
+                    if (words) {
+                        logIntercept('TalkWindow.SetWordsInfo', words, newWords, newWords !== words,
+                            'cid=' + cid + (mode ? ' ' + mode : ''));
+                    }
+                    if (name) {
+                        logCapture('STORY_NAME', {
+                            name: name, replaced: newName, ok: newName !== name, cid: cid,
+                            mode: CFG.STORY_MODE,
+                        });
+                    }
                 }
             },
         });
@@ -307,6 +350,7 @@ function install() {
         demoKeys: Object.keys(DEMO_ZH).length,
         uiWordings: Object.keys(uiWordingsMap()).length,
         uiPlainText: Object.keys(uiPlainTextMap()).length,
+        storyText: Object.keys(storyTextMap()).length,
         stats: stats,
     });
 }

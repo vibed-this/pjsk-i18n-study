@@ -14,7 +14,33 @@
     "ui_plain_text": "i18n/ui/plain-text.json",
     "ui_plain_text_sha256": "bfe1ace29b0f4248262f572c1c6b5351a590a3a763048ce65dc0e717bfc31fc4",
     "entry_count": 4838,
-    "plain_text_count": 3440
+    "plain_text_count": 3440,
+    "story_text": "i18n/story/text.json",
+    "story_text_sha256": "13fe938fb45e820672fad3dca3b8a4d214f2f3aec5ae6807be3d8fc892d0700c",
+    "story_text_count": 3
   },
-  "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText)"
+  "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText); story jp→zh (SetWordsInfo)",
+  "story": {
+    "demo": true,
+    "built_at": "2026-06-28T16:08:53+00:00",
+    "stats": {
+      "scenarios_processed": 1,
+      "scenarios_aligned": 1,
+      "body_pairs": 2,
+      "name_pairs": 1,
+      "text_entries": 3,
+      "collision_count": 0
+    },
+    "inventory": {
+      "jp_card_episodes": 2670,
+      "cn_card_episodes": 2384,
+      "jp_event_episodes": 1688,
+      "cn_event_episodes": 1498,
+      "jp_total": 4358,
+      "cn_total": 3882,
+      "common": 3882,
+      "jp_only": 476
+    },
+    "gap_report": "i18n/reports/story-gap-report.json"
+  }
 }

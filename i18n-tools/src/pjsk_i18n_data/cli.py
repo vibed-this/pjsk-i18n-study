@@ -5,6 +5,7 @@ import sys
 
 from .build import build_ui_pack
 from .fetch import fetch_all
+from .story import build_story_pack, fetch_scenario_inventory
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
@@ -24,13 +25,51 @@ def cmd_build(args: argparse.Namespace) -> int:
     print(f"[+] gap report → {result.report_path} (jp_only={len(result.jp_only)})")
     if result.override_count:
         print(f"[+] overrides applied: {result.override_count}")
+    if args.with_story:
+        out, gap = build_story_pack(
+            demo=args.story_demo,
+            fetch_inventory=not args.story_demo,
+            write_per_scenario=args.per_scenario,
+        )
+        stats = gap.get("stats", {})
+        print(f"[+] story text: {gap.get('entry_count', 0)} entries → {out}")
+        print(
+            f"[+] aligned {stats.get('scenarios_aligned', 0)}/{stats.get('scenarios_processed', 0)} "
+            f"scenarios"
+        )
+    return 0
+
+
+def cmd_story_inventory(args: argparse.Namespace) -> int:
+    inv = fetch_scenario_inventory()
+    counts = inv["counts"]
+    print(f"[+] scenario inventory → common={counts['common']} jp_only={counts['jp_only']}")
+    return 0
+
+
+def cmd_story_build(args: argparse.Namespace) -> int:
+    if not args.demo and not args.no_inventory:
+        fetch_scenario_inventory()
+    out, gap = build_story_pack(
+        demo=args.demo,
+        fetch_inventory=not args.no_inventory and not args.demo,
+        write_per_scenario=args.per_scenario,
+    )
+    stats = gap.get("stats", {})
+    print(f"[+] story text: {gap.get('entry_count', 0)} entries → {out}")
+    print(
+        f"[+] aligned {stats.get('scenarios_aligned', 0)}/{stats.get('scenarios_processed', 0)} "
+        f"scenarios (body={stats.get('body_pairs', 0)} name={stats.get('name_pairs', 0)})"
+    )
+    if args.demo:
+        print("[+] demo mode: built from i18n-data/fixtures/scenario/")
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pjsk-i18n",
-        description="Fetch CN master wordings and build UI translation pack for JP client mod",
+        description="Fetch CN master data and build UI/story translation packs for JP client mod",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -41,7 +80,49 @@ def build_parser() -> argparse.ArgumentParser:
     p_build = sub.add_parser("build", help="merge CN + overrides → i18n/ui/wordings.json")
     p_build.add_argument("--no-fetch", action="store_true", help="use existing cache only")
     p_build.add_argument("--refresh", action="store_true", help="re-download before build")
+    p_build.add_argument(
+        "--with-story",
+        action="store_true",
+        help="also run story-build after UI pack",
+    )
+    p_build.add_argument(
+        "--story-demo",
+        action="store_true",
+        help="with --with-story: use fixtures instead of cache/scenario",
+    )
+    p_build.add_argument(
+        "--per-scenario",
+        action="store_true",
+        help="with --with-story: write i18n/story/by-scenario/<id>.json",
+    )
     p_build.set_defaults(func=cmd_build)
+
+    p_inv = sub.add_parser(
+        "story-inventory",
+        help="fetch JP/CN scenarioId lists from master diff (no AssetBundle required)",
+    )
+    p_inv.set_defaults(func=cmd_story_inventory)
+
+    p_story = sub.add_parser(
+        "story-build",
+        help="align JP/CN scenario JSON → i18n/story/text.json",
+    )
+    p_story.add_argument(
+        "--demo",
+        action="store_true",
+        help="use bundled fixtures (Frida E2E sample lines)",
+    )
+    p_story.add_argument(
+        "--no-inventory",
+        action="store_true",
+        help="skip refreshing scenario-inventory.json",
+    )
+    p_story.add_argument(
+        "--per-scenario",
+        action="store_true",
+        help="also write i18n/story/by-scenario/<id>.json",
+    )
+    p_story.set_defaults(func=cmd_story_build)
 
     return parser
 

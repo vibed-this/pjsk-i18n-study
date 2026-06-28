@@ -15,6 +15,8 @@ from .paths import (
     OUT_MANIFEST,
     OUT_PLAIN_TEXT,
     OUT_REPORT,
+    OUT_STORY_GAP_REPORT,
+    OUT_STORY_TEXT,
     OUT_UI,
     REPO_ROOT,
     SOURCES_LOCK,
@@ -38,6 +40,42 @@ class BuildResult:
 
 def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def patch_manifest_story(*, demo: bool = False) -> None:
+    """Merge story/text.json checksum into i18n/manifest.json (creates minimal manifest if missing)."""
+    if not OUT_STORY_TEXT.is_file():
+        return
+
+    manifest: dict = {}
+    if OUT_MANIFEST.is_file():
+        manifest = json.loads(OUT_MANIFEST.read_text(encoding="utf-8"))
+
+    outputs = manifest.setdefault("outputs", {})
+    outputs["story_text"] = str(OUT_STORY_TEXT.relative_to(REPO_ROOT)).replace("\\", "/")
+    outputs["story_text_sha256"] = _sha256_file(OUT_STORY_TEXT)
+    outputs["story_text_count"] = len(
+        json.loads(OUT_STORY_TEXT.read_text(encoding="utf-8"))
+    )
+
+    gap: dict = {}
+    if OUT_STORY_GAP_REPORT.is_file():
+        gap = json.loads(OUT_STORY_GAP_REPORT.read_text(encoding="utf-8"))
+
+    manifest["story"] = {
+        "demo": demo,
+        "built_at": gap.get("built_at") or utc_now_iso(),
+        "stats": gap.get("stats"),
+        "inventory": gap.get("inventory"),
+        "gap_report": str(OUT_STORY_GAP_REPORT.relative_to(REPO_ROOT)).replace("\\", "/"),
+    }
+
+    notes = manifest.get("notes", "")
+    story_note = "story jp→zh (SetWordsInfo)"
+    if story_note not in notes:
+        manifest["notes"] = (notes + "; " if notes else "") + story_note
+
+    write_json(OUT_MANIFEST, manifest)
 
 
 def build_ui_pack(

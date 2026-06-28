@@ -1,0 +1,33 @@
+{
+  "built_at": "2026-06-28T16:08:53+00:00",
+  "sources": {
+    "jp_dir": "E:\\GithubRepos\\pjsk-i18n-mod\\i18n-data\\fixtures\\scenario\\jp",
+    "cn_dir": "E:\\GithubRepos\\pjsk-i18n-mod\\i18n-data\\fixtures\\scenario\\cn",
+    "jp_files": 1,
+    "cn_files": 1,
+    "common_files": 1
+  },
+  "inventory": {
+    "jp_card_episodes": 2670,
+    "cn_card_episodes": 2384,
+    "jp_event_episodes": 1688,
+    "cn_event_episodes": 1498,
+    "jp_total": 4358,
+    "cn_total": 3882,
+    "common": 3882,
+    "jp_only": 476
+  },
+  "stats": {
+    "scenarios_processed": 1,
+    "scenarios_aligned": 1,
+    "body_pairs": 2,
+    "name_pairs": 1,
+    "text_entries": 3,
+    "collision_count": 0
+  },
+  "line_mismatches": [],
+  "jp_only_file_ids": [],
+  "jp_only_file_count": 0,
+  "collision_samples": [],
+  "inventory_jp_only_count": 476
+}

@@ -67,8 +67,8 @@
 - [x] **Master 明文映射**：`pjsk-i18n build` → `i18n/ui/plain-text.json`（3440 jp→zh，musics/characters/cards/vocals/profiles）
 - [x] **`intercept.js` cn + SetText**：`UI_PLAIN_TEXT` 明文 lookup；`CustomText.SetText(slot)` Hook
 - [ ] `overrides/ui.yaml`：`MSG_STARTAPP_*`、日服独有 306 key（见 `i18n/reports/gap-report.json`）
-- [ ] **剧情国服挪用**：`sekai-assets-updater` JP+CN scenario → `i18n/story/`（按 `scenarioId`+行序）；`SetWordsInfo` 接入（见 text-rendering §剧情国服）
-- [ ] 剧情 gap：仅日服 `scenarioId` 清单（活动 190 + 卡片 286）与 fallback 策略
+- [~] **剧情国服挪用**：`pjsk-i18n story-inventory` + `story-build` → `i18n/story/text.json`；Frida `STORY_MODE=cn` 已接入；**待** `cache/scenario/` 全量 AssetBundle + 真机 E2E
+- [x] 剧情 gap 清单：`story-inventory` → common=3882 / jp_only=476（`i18n-data/cache/scenario-inventory.json`）
 - [ ] 翻译包热更新路径（manifest checksum 已有）
 
 ---
@@ -121,7 +121,10 @@ uv sync
 # 构建 UI 词表（国服 diff）
 uv run --project i18n-tools pjsk-i18n build
 
-# 真机 intercept（自动 UI_MODE=cn 若 i18n/ui/wordings.json 存在）
+# 剧情演示包（fixtures，无需 AssetBundle）
+uv run --project i18n-tools pjsk-i18n story-build --demo
+
+# 真机 intercept（自动 UI_MODE=cn / STORY_MODE=cn 若对应 json 存在）
 uv run python frida/run.py intercept --duration 120
 
 uv run python frida/run.py monitor --duration 120

@@ -1,0 +1,17 @@
+{
+  "ScenarioId": "demo_talk",
+  "Snippets": [
+    { "Index": 0, "Action": 1, "ReferenceIndex": 0 },
+    { "Index": 1, "Action": 1, "ReferenceIndex": 1 }
+  ],
+  "TalkData": [
+    {
+      "WindowDisplayName": "初音未来",
+      "Body": "你好。\n居然还会有人来，真少见呢"
+    },
+    {
+      "WindowDisplayName": "初音未来",
+      "Body": "我是初音未来。\n你的名字是？"
+    }
+  ]
+}
