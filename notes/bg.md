@@ -132,7 +132,7 @@ Zygisk 模块 + native Hook 库
 |---|---|---|
 | ★★★★★ | metadata 解密 / 符号恢复 | 每次版本更新可能变化，sssekai 可辅助 |
 | ★★★★☆ | 中文字体注入 | TMP Atlas 替换涉及底层资源格式 |
-| ★★★☆☆ | 文本 Hook 实现 | 技术成熟，待确认具体 Hook 目标 |
+| ★★★☆☆ | 文本 Hook 实现 | Frida 原型已验证偏移与调用；待 Zygisk 封装 |
 | ★★★☆☆ | AssetBundle 解密 + 替换 | XOR 逻辑简单，难在资源管理与时机 |
 | ★★☆☆☆ | 翻译数据管理 | 纯工程问题，维护量大但技术不难 |
 
@@ -140,13 +140,15 @@ Zygisk 模块 + native Hook 库
 
 1. 用 sssekai 解密 metadata，用 dnSpy 打开 DummyDll，**确认文本渲染组件类型**（TMP 或自定义）
 2. 参照 gakuen-imas-localify 源码，理解 Zygisk + IL2CPP hook 的工程结构
-3. 用 Frida 脚本快速原型化文本拦截，验证可行性后再封装为 Zygisk 模块
+3. ~~用 Frida 脚本快速原型化文本拦截~~ → **已完成 gadget 真机验证**（见 [frida.md](./frida.md)），下一步封装 Zygisk 模块
 4. 翻译素材优先从 sekai.best 同步的现有解密数据中获取
 
 ### 已确认的开放问题
 
-- PJSK 剧情对话框的具体文本渲染组件（TMP 还是自定义）**尚未直接确认**，需要实际 dump 后才能确定 Hook 目标
-- 游戏是否使用了自定义振假名层（影响字体注入策略）
+- ~~剧情对话框文本渲染组件~~ → 已确认，见 [text-rendering.md](./text-rendering.md)
+- 剧情 Hook `SetWordsInfo` 在真机动态场景中**尚未触发验证**（Frida 计数为 0）
+- `WordingManager.Get` 返回值在 Frida 层难以直接读取，native Hook 实现方式待决
+- 游戏是否使用了自定义振假名层（影响字体注入策略）→ 见 [text-rendering.md](./text-rendering.md)，无独立剧情振假名层
 
 ---
 

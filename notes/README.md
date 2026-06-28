@@ -9,4 +9,5 @@
 | 文本渲染组件 | [text-rendering.md](./text-rendering.md) | TMP、TalkWindow、WordingManager |
 | IDA 二进制验证 | [ida-verification.md](./ida-verification.md) | Hook 点偏移与反汇编确认 |
 | Hook 策略 | [hook-strategy.md](./hook-strategy.md) | 分层 Hook 方案与下一步 |
+| Frida 动态分析 | [frida.md](./frida.md) | gadget 补丁、联调步骤 |
 | 工具链与产物 | [toolchain.md](./toolchain.md) | 环境状态、产物路径索引 |

@@ -1,6 +1,6 @@
 # 工具链与产物
 
-> 各分析主题见 [metadata.md](./metadata.md)、[il2cpp-dump.md](./il2cpp-dump.md)、[ida-verification.md](./ida-verification.md)。
+> 各分析主题见 [metadata.md](./metadata.md)、[il2cpp-dump.md](./il2cpp-dump.md)、[ida-verification.md](./ida-verification.md)、[frida.md](./frida.md)。
 
 ## 分析目标
 
@@ -8,14 +8,14 @@
 
 ## 手段
 
-本地工具安装、APK 解包、sssekai 解密、Il2CppDumper dump、IDA Pro + MCP 联调。
+本地工具安装、APK 解包、sssekai 解密、Il2CppDumper dump、IDA Pro + MCP 联调、Frida gadget 真机注入。
 
 ## 过程
 
 按关键路径依次搭建：
 
 ```
-APK 解包 → sssekai 解密 metadata → Il2CppDumper → IDA 验证 Hook 点
+APK 解包 → sssekai 解密 metadata → Il2CppDumper → IDA 验证 Hook 点 → Frida gadget 真机验证
 ```
 
 ## 工具就绪状态
@@ -29,22 +29,26 @@ APK 解包 → sssekai 解密 metadata → Il2CppDumper → IDA 验证 Hook 点
 | Il2CppDumper 产物 | ✅ `tools/Il2CppDumper/` |
 | IDA 数据库 | ✅ `libil2cpp.so.i64`（已重命名关键函数） |
 | IDA Pro MCP | ✅ `127.0.0.1:13337` |
-| Frida（PC 端） | ✅ 已安装 |
+| Frida（PC 端） | ✅ 17.10.1 |
+| Android SDK | ✅ `D:\SDK\Android`（adb / apksigner / zipalign） |
+| frida-gadget 补丁 | ✅ `frida/gadget/out/*.gadget.apk`，已安装 TB322FC |
+| Frida 动态验证（真机） | ✅ gadget 联调成功，三 Hook 点计数已验证 |
 | sssekai | ✅ v0.8.0 + `[il2cpp]` extra |
 
-### 未就绪
+### 未就绪 / 搁置
 
 | 组件 | 说明 |
 |------|------|
 | Hex-Rays | 不可用，仅反汇编分析 |
 | Il2CppDumper 符号批量导入 IDA | `ida_py3.py` 需交互选文件，未执行 |
-| Frida 动态验证 | 无可用 Android 设备 / frida-server |
+| Frida 动态验证（模拟器） | frida-server + ARM 转译不稳定，spawn 后未见 il2cpp 加载 |
+| 游戏版本号（本地 APK） | 本地 `apk/` 对应 versionName **待确认**；设备曾装 6.5.5 |
 | gakuen-imas-localify 源码 | Zygisk 模块参考，未克隆 |
-| 游戏版本号 | APK 对应的具体 `versionName` 未确认 |
+| 文本内容动态抓取 | Hook 计数 OK，字符串读取脚本待改进 |
 
 ## 结论
 
-静态分析工具链已打通；阻塞项集中在 Hex-Rays 许可证、Frida 动态环境、参考实现源码三个方面。产物体积极大，已通过 `.gitignore` 排除出版本控制。
+静态分析 + IDA 验证 + Frida 真机原型已打通。当前阻塞项：Hex-Rays、模拟器动态环境、文本字符串抓取完善、Zygisk 封装。产物体积极大，已通过 `.gitignore` 排除出版本控制。
 
 ## 产物索引
 
@@ -64,12 +68,26 @@ tools/Il2CppDumper/
 ├── il2cpp.h
 └── DummyDll/
 
+apk/
+├── base.apk
+├── split_config.arm64_v8a.apk
+└── split_UnityDataAssetPack.apk
+
 apk/split_config.arm64_v8a/lib/arm64-v8a/
 ├── libil2cpp.so
 └── libil2cpp.so.i64             # IDA 数据库（已重命名关键函数）
+
+frida/
+├── hook_monitor_bundle.js       # 真机验证用监控脚本
+├── device.py                    # adb forward + Frida 连接
+└── gadget/
+    ├── patch_apk.ps1 / install.ps1 / connect.ps1
+    ├── tools/                   # apktool, libfrida-gadget.so, debug.keystore
+    └── out/                     # 签名后的 *.gadget.apk
 ```
 
 ## 相关笔记
 
+- [frida.md](./frida.md) — gadget 补丁与联调流程
 - [ref.md](./ref.md) — 外部参考资料汇总
 - [hook-strategy.md](./hook-strategy.md) — 下一步实施方向

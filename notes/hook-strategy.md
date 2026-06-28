@@ -1,6 +1,6 @@
 # Hook 策略
 
-> 组件分析见 [text-rendering.md](./text-rendering.md)。偏移验证见 [ida-verification.md](./ida-verification.md)。
+> 组件分析见 [text-rendering.md](./text-rendering.md)。偏移验证见 [ida-verification.md](./ida-verification.md)。Frida 实机验证见 [frida.md](./frida.md)。
 
 ## 分析目标
 
@@ -10,6 +10,7 @@
 
 - Il2CppDumper 类继承关系与调用链分析
 - IDA 反汇编确认 ARM64 参数传递与函数入口
+- Frida gadget 真机动态验证（TB322FC，见 [frida.md](./frida.md)）
 - 参照 gakuen-imas-localify 的 Zygisk + IL2CPP Hook 路线（尚未实施）
 
 ## 过程
@@ -18,6 +19,7 @@
 2. 在 IDA 中验证各候选函数的入口地址、参数寄存器与调用频率。
 3. 排除仅在 metadata 中引用的间接调用点，优先选择有直接 `xrefs_to` 的函数。
 4. 按覆盖范围与性能开销分层，确定优先级。
+5. **2026-06-28 Frida 验证**：真机 gadget 注入后，三处首选 Hook 点均成功 `Interceptor.attach`；主界面 90s 内 `WordingManager.Get` 19 次、`CustomTextMesh.SetText` 13 次；`SetWordsInfo` 未触发（未进剧情）。
 
 ## 推荐 Hook 点（按优先级）
 
@@ -31,26 +33,28 @@ UI 文本   → WordingManager.Get        @ 0x60241BC   key → 中文 lookup，
 
 ## 策略说明
 
-| 层级 | 函数 | 优势 | 劣势 |
-|------|------|------|------|
-| 剧情 | `SetWordsInfo` | 在打字机效果之前拦截；参数明确；调用者少 | 仅覆盖剧情对话 |
-| UI | `WordingManager.Get` | 一次 Hook 覆盖大部分菜单/按钮词表 | 静态方法包装器，需在入口拦截 |
-| 兜底 | `CustomTextMesh.SetText` | 覆盖所有 CustomTextMesh 实例 | 调用频繁，需高效 lookup |
-| 字体 | `SetupBuiltinFontAsset` | 在字体加载时注入 fallback | 需准备 CJK TMP_FontAsset |
-| 底层 | `TMP_Text.set_text` | 覆盖所有 TMP 文本 | 范围过宽，性能压力大 |
+| 层级 | 函数 | 优势 | 劣势 | Frida 验证 |
+|------|------|------|------|------------|
+| 剧情 | `SetWordsInfo` | 在打字机效果之前拦截；参数明确；调用者少 | 仅覆盖剧情对话 | ⏳ 已安装，待进剧情测 |
+| UI | `WordingManager.Get` | 一次 Hook 覆盖大部分菜单/按钮词表 | 静态包装器，返回值读取困难 | ✅ 有调用；字符串待修 |
+| 兜底 | `CustomTextMesh.SetText` | 覆盖所有 CustomTextMesh 实例 | 调用频繁，需高效 lookup | ✅ 有调用；字符串待修 |
+| 字体 | `SetupBuiltinFontAsset` | 在字体加载时注入 fallback | 需准备 CJK TMP_FontAsset | 未测 |
+| 底层 | `TMP_Text.set_text` | 覆盖所有 TMP 文本 | 范围过宽，性能压力大 | 未测 |
 
 ## 结论
 
-- 静态研究阶段的 Hook 目标选择**已完成**，可进入 Frida 原型验证。
-- UI 文本需维护 `WordingKey → 中文` 词表；剧情文本可在 `SetWordsInfo` 层按原文 lookup 替换。
+- 静态 + 动态验证表明：**首选三 Hook 点的 IDA 偏移在真机运行时正确**，可作为 Zygisk native Hook 的地址依据。
+- UI 拦截优先考虑 `CustomTextMesh.SetText`（参数直观）配合 `WordingManager.Get`（按 key lookup）；剧情仍首选 `SetWordsInfo`。
+- `WordingManager.Get` 作为静态包装器，Frida 层直接读返回值不可靠，native 实现需用 IL2CPP API 或改在 `CustomTextMesh` 层替换。
 - 字体方案优先考虑向 `TMP_FontAsset.fallbackFontAssetTable` 注入含 CJK 字符的子集字体。
 
 ## 下一步
 
-1. **Frida 原型**：在 Android 设备上 Hook `TalkWindow.SetWordsInfo` 与 `WordingManager.Get`，验证文本拦截可行性。
-2. **Zygisk 模块**：参照 gakuen-imas-localify 封装 native Hook 库。
+1. **Frida 深化**：修复字符串读取；进剧情验证 `SetWordsInfo`；测试 `hook_translate.js` 可见替换。
+2. **Zygisk 模块**：参照 gakuen-imas-localify，用已验证偏移封装 ShadowHook/Dobby native 库。
 3. **翻译数据**：从 sekai.best 同步 scenario JSON 与 MasterWording 词表，建立 key/原文 → 中文映射。
 
 ## 相关笔记
 
+- Frida 联调细节：[frida.md](./frida.md)
 - 环境与阻塞项：[toolchain.md](./toolchain.md)

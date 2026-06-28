@@ -98,8 +98,10 @@ ARM64 参数：
 - 4 个核心 Hook 候选在二进制中**均为有效函数**，无额外混淆导致入口不可识别。
 - RVA 与 IDA 入口的偏差（`0x50`~`0xF0`）属 IL2CPP codegen 正常现象，**Hook 地址以 IDA 函数入口为准**。
 - IDA 中已重命名 8 个关键函数并保存至 `.i64`。
+- **动态验证**（见 [frida.md](./frida.md)）：真机运行时 `base + 偏移` 与 `Interceptor.attach` 结果一致，其中 `WordingManager.Get`、`CustomTextMesh.SetText`、`TalkWindow.SetWordsInfo` 三处已在真机成功安装 Hook。
 
 ## 相关笔记
 
 - Hook 方案：[hook-strategy.md](./hook-strategy.md)
+- Frida 实机验证：[frida.md](./frida.md)
 - 工具与环境：[toolchain.md](./toolchain.md)
