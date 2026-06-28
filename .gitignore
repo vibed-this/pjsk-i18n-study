@@ -1,0 +1,96 @@
+# =============================================================================
+# PJSK i18n mod — reverse engineering artifacts (large / generated / copyrighted)
+# =============================================================================
+
+# Game packages & extracted native binaries
+apk/
+
+# Decrypted metadata, il2cpp copies, Il2CppDumper working dirs
+dump/
+
+# Downloaded RE tools (Il2CppDumper exe/zip) and generated dumps
+tools/
+
+# =============================================================================
+# IDA Pro databases (multi-GB; live alongside libil2cpp.so)
+# =============================================================================
+*.i64
+*.id0
+*.id1
+*.id2
+*.idb
+*.nam
+*.til
+
+# =============================================================================
+# IL2CPP / Unity dump outputs (in case generated outside tools/)
+# =============================================================================
+dump.cs
+script.json
+stringliteral.json
+il2cpp.h
+DummyDll/
+global-metadata.dat
+
+# =============================================================================
+# Native & package binaries (safety net outside apk/)
+# =============================================================================
+*.apk
+*.aab
+*.so
+*.dex
+*.dat
+
+# =============================================================================
+# Agent / IDE session cache (auto-generated, machine-local)
+# =============================================================================
+agent-tools/
+terminals/
+mcps/
+
+# MCP config contains machine-specific paths (uv, jadx install dir, etc.)
+.mcp.json
+
+# CommandCode local preference cache
+.commandcode/
+
+# =============================================================================
+# OS & editor noise
+# =============================================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# =============================================================================
+# Python (for sssekai scripts / tooling)
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# =============================================================================
+# C/C++ native mod build artifacts (future Zygisk / ndk output)
+# =============================================================================
+*.o
+*.a
+*.obj
+build/
+out/
+.cxx/
+
+# =============================================================================
+# Logs & temp
+# =============================================================================
+*.log
+*.tmp
+*.temp
+*.swp
+*~
