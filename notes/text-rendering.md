@@ -113,7 +113,7 @@ CustomTextMesh.SetWordingText(key)  // 0x4F2B408，仅存 key 到 0x7A0
 
 **结论**：日语文本**不在** `stringliteral.json`（那里只有 key 名）；正文在 **Master 词表** `MasterWording.value`，运行时落入 `WordingManager.dictionary`。
 
-另：`stringliteral.json` 有路径 `"Wording/wording"`（`0xB731450`），疑为 AssetBundle 内词表资源引用，与 Master API 并行存在，具体用途待验证。
+`WordingManager.ForceInit`（`0x602E574`）在 Master 落地前通过 `Resources.Load("Wording/wording")` 加载**内置引导词表**（见下方 §6）。与 Master API 词表为**两路并行**，运行时合并进 `dictionary`。
 
 #### 3. 外部公开词表对照
 
@@ -133,10 +133,10 @@ CustomTextMesh.SetWordingText(key)  // 0x4F2B408，仅存 key 到 0x7A0
 | `WORD_DECIDE` | ✅ | 決定 |
 | `WORD_CANCEL` | ✅ | キャンセル |
 | `MSG_MOVIE_SKIP_BODY` | ✅ | ムービーをスキップしますか？ |
-| `MSG_STARTAPP_LOGIN` | ❌ | 待从设备 Master 缓存或新版库提取 |
+| `MSG_STARTAPP_LOGIN` | ❌ | 解包内置词表可查（§6）；完整 Master 表仍缺 |
 | `MSG_STARTAPP_MASTER` | ❌ | 同上 |
 
-`MSG_STARTAPP_*` 共 4 个字面量均在二进制中，但不在当前公开 `wordings.json`——可能是**较新版本新增 key**，需从真机 `MasterDataManager` 缓存或更新版 master diff 补齐。
+`MSG_STARTAPP_*` 在公开 `wordings.json` 缺失，但 APK 内置引导词表已含日文（§6）。
 
 #### 4. `MSG_STARTAPP_*` 来源追踪（2026-06-28）
 
@@ -186,10 +186,49 @@ flowchart TD
 ##### 日文正文从哪来
 
 - **key 定义**：编译进 `libil2cpp.so` 的 C# 字面量（`TitleController` 登录管线）。
-- **日文 value**：仍在运行时 `WordingManager.Get` 查 `MasterWording` 表；`LoadMaster` 完成前可能显示 key 本身或空，完成后才有日文。
-- 公开 `wordings.json` 缺失不代表游戏内无译文——需等 Master 落地后 Hook `WordingManager.Get` 或导出设备 `MasterDataManager` 缓存验证。
+- **日文 value（启动阶段）**：内置引导词表 `Wording/wording`（§6），`ForceInit` 在 `LoadMaster` 前即可提供 `MSG_STARTAPP_*` 等约 196 条。
+- **日文 value（全量 UI）**：`LoadMaster` 后 `AddMasterWording` 合并 `MasterWording` 表（约 3500+ 条）。
 
-#### 5. 与剧情文本的区分
+#### 5. 解包获取词表（不依赖 sekai-master-db-diff）（2026-06-28，暂缓脚本化）
+
+##### 分析目标
+
+评估能否仅靠 **APK / 设备解包** 得到 `wordings.json` 等价物，而不依赖社区 `sekai-master-db-diff` 仓库。
+
+##### 手段
+
+解包 `split_UnityDataAssetPack.apk`；IDA 追 `WordingManager.ForceInit`；`adb pull` 设备 Master 缓存。
+
+##### 过程
+
+1. **IDA**：`ForceInit` @ `0x602E574` 在 `AddMasterWording` 之前调用 `Resources.Load("Wording/wording")` @ `0x6EA88F8`，再按逗号 `0x2C` 解析 CSV 写入 `dictionary`。
+2. **APK 解包**：内置资源不在独立 `Wording/` 目录，而在 Unity 序列化块：
+   - 路径：`apk/split_UnityDataAssetPack.apk` → `assets/bin/Data/112b24b5d05c9446b9dc9a758f423bbd`（17 588 B）
+   - 格式：`wordingKey,日文value` 交替，条目以 `\n` 分隔；示例：
+     - `MSG_STARTAPP_LOGIN` → `ゲームにログインしています。`
+     - `MSG_STARTAPP_MASTER` → `必要なデータを取得しています。`
+     - `MSG_STARTAPP_REGISTER` → `ユーザーを作成しています。`
+     - `MSG_STARTAPP_USER` → `プロジェクトセカイにようこそ。`
+   - 统计：**196** 条唯一 `MSG_*`/`WORD_*`（含全部 4 个 `MSG_STARTAPP_*`）；**无** `WORD_DECIDE` 等菜单词（那些只在 Master 表）。
+3. **全量 Master 词表**：**不在 APK 明文**。登录后写入设备缓存：
+   - 目录：`/sdcard/Android/data/com.sega.pjsekai/files/p6FeKw3CVfhD2S5E/`（= `MasterDataManager.sizeoffs`）
+   - 主文件：`YUHXZyDBFcwbeeFD`（= `MasterDataManager.temp`，约 126 MB）
+   - 加密：`FastAESCrypt`；pull 样本（`dump/tmp/master_cache`）内搜不到 `wordingKey` / `MSG_STARTAPP` 明文
+   - 另有 `snippets/` 分片（Base64 类名文件名）
+4. **运行时 CDN**：`suiteMasterSplitPath` → `GetSuiteMasterAPI` 分片下载 MessagePack `SuiteMaster.wordings`（与 diff 仓库来源同类，需抓包或 `sekai-assets-updater` 类工具）。
+
+##### 结论
+
+| 数据源 | 能否解包拿到 | 覆盖范围 | 备注 |
+|--------|-------------|----------|------|
+| 内置 `Wording/wording` | ✅ | ~196 条引导/UI 错误/登录文案 | APK 解包即可；**不等价**于完整 `wordings.json` |
+| Master 缓存 `YUHXZyDBFcwbeeFD` | ⏳ 需解密 | 全量 `wordings` | 真机 pull 已验证路径；`FastAESCrypt` 密钥待逆向 |
+| `suiteMaster` CDN 分片 | ⏳ 需下载+解析 | 全量 | 不依赖 diff 仓库，但需 API 路径与 MessagePack 管线 |
+| `sekai-master-db-diff` | ✅ 直接用 | 3519 条（滞后于最新版） | 社区已解密整理，维护成本最低 |
+
+**实践建议（暂缓）**：Mod 翻译管线可先用内置 196 条覆盖启动/错误文案；全量 UI 仍须 Master 解密或社区 diff。
+
+#### 6. 与剧情文本的区分
 
 | 类型 | 数据形态 | Hook 点 |
 |------|----------|---------|
@@ -202,7 +241,7 @@ flowchart TD
 |------|------|
 | key 在哪 | 代码字面量 + Prefab `wordingKey` 字段 + 运行时 `SetWordingText` 传参 |
 | 日文在哪 | `MasterWording.value`，经 `MasterDataManager` 加载后写入 `WordingManager.dictionary` |
-| 离线数据源 | 首选 `sekai-master-db-diff/wordings.json`（覆盖 1530/1651 已知字面量）；缺口 key 需抓设备 Master 缓存 |
+| 离线数据源 | 全量：`sekai-master-db-diff` 或解密 Master 缓存；启动文案：解包 `112b24b5…` 内置词表（196 条） |
 | 翻译接入点 | 在 `WordingManager.Get` 或 `TMP_Text.set_text` 用 `key → 中文` 替换；剧情走 `SetWordsInfo` 独立映射 |
 
 ## 相关笔记

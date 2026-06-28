@@ -24,7 +24,7 @@
 - [~] **词表 key 对照**：静态链路已理清（见 [text-rendering.md](notes/text-rendering.md) §词表）；`WORD_*` / 部分 `MSG_*` 已在 sekai-master-db-diff 对照
   - [x] `WORD_DECIDE` / `WORD_CANCEL` / `MSG_MOVIE_SKIP_BODY` → 公开库可查
   - [x] `MSG_STARTAPP_*` 静态来源 — `TitleController` 登录链硬编码；见 [text-rendering.md](notes/text-rendering.md) §4
-  - [ ] `MSG_STARTAPP_*` 日文 value — Master 加载后 Hook `WordingManager.Get` 或导出设备缓存对照
+  - [x] `MSG_STARTAPP_*` 日文 value — APK 内置引导词表已确认（§5）；非 Master 表
 - [ ] **修正字符串读取策略**（基于加载阶段 monitor 结论）：
   - `SetWordingText` `onEnter` 读 key — 已验证可用，保留
   - `UpdateWordingText` `onLeave` 读返回值 — 已证实不可靠（`wordingText` 计数增加但 `readStr` 全 null），改 Hook `TMP_Text.set_text` 或 IDA 追 `sub_60282AC` 实现体
@@ -55,8 +55,11 @@
 ## P3 — 翻译数据管线
 
 - [~] 从 sekai.best / Sekai-World 同步 **MasterWording** 词表，建立 `key → 日文 → 中文` 映射原型（数据源：`sekai-master-db-diff/wordings.json`，3519 条；见 [text-rendering.md](notes/text-rendering.md)）
+- [x] **解包词表路径调研**（暂缓脚本化）：内置 `Wording/wording` ~196 条可 APK 解包；全量须解密 `p6FeKw3CVfhD2S5E/YUHXZyDBFcwbeeFD` 或 CDN suiteMaster — 见 [text-rendering.md](notes/text-rendering.md) §5
+- [-] **内置词表提取脚本**：从 `112b24b5d05c9446b9dc9a758f423bbd` 解析 CSV → JSON（暂缓）
+- [-] **Master 缓存解密**：`FastAESCrypt` + `YUHXZyDBFcwbeeFD` → 全量 `wordings`（暂缓）
 - [ ] 同步 **scenario / unitystory** JSON，建立剧情文本 ID → 译文映射
-- [ ] 在 `frida/scripts/intercept.js` 或新 `translate` 模式中接入 demo 词表（先覆盖 `MSG_STARTAPP_*` 等已观测 key）
+- [ ] 在 `frida/scripts/intercept.js` 或新 `translate` 模式中接入 demo 词表（可先覆盖内置 196 条 + `MSG_STARTAPP_*`）
 - [ ] 设计翻译包格式（版本号、checksum、热更新路径）
 
 ---
