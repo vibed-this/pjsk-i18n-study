@@ -91,8 +91,10 @@ uv run --project i18n-tools pjsk-i18n build --with-story
 | 阶段 | JP | CN |
 |------|----|----|
 | 下载 bundle（`event_story/.../scenario`） | 206 / ~14 MB | 182 / ~12.7 MB |
-| 写出 scenario JSON | 1696 | 1506 |
+| 写出 scenario JSON（写入次数 / 唯一文件） | 1696 / **1688** | 1506 / 1498 |
 | story-build 共有文件 | — | 1498（与 Master 活动话数一致） |
+
+JP 写入 1696 次但磁盘仅 1688 个唯一 `scenarioId`（**8 次同 ID 覆盖**）；`discover_scenario_files` 对重复 ID 静默取后者，提取脚本应补冲突告警。
 
 **story-build 产出**（`manifest.json` / `story-gap-report.json`）：
 
@@ -107,6 +109,15 @@ uv run --project i18n-tools pjsk-i18n build --with-story
 
 Master 清单（`story-inventory`）：活动共有 **1498** 话；卡片共有 **2384** 话；仅日服 **476**（190 活动 + 286 卡片）— 卡片 JSON **尚未**按路径 A 拉取。
 
+### 6. 结构与代码复核（2026-06-29）
+
+| 检查项 | 结论 |
+|--------|------|
+| `extract_talk_lines` 模型 | ✅ 与 IDA/Capstone、`computeTalkLineIdx` 一致（`Snippets` 按 `Index`，`Action=1`） |
+| 3 个 `line_mismatch` | CN `TalkData`/Talk snippet **多于** JP（+1/+6/+10）；非 Talk snippet 数量一致 → **资产版本差**（JP 6.5.5 vs CN 6.0.0），非提取 bug |
+| 全局 `jp→zh` collision | 5364 条记录；已对齐 scenario 中约 **3.9%** body 行（5007/127530）与按行正确译文不一致 → 扁平表为权宜方案 |
+| 运行时查表 | `SetWordsInfo` 收到**处理后**明文（见 [ida-verification.md](./ida-verification.md) §剧情运行时 ID）；量产推荐 `(scenarioId, talkLineIdx)` 按行查表 |
+
 ## 结论
 
 | 问题 | 结论 |
@@ -114,7 +125,8 @@ Master 清单（`story-inventory`）：活动共有 **1498** 话；卡片共有 
 | 能否不走 sekai.best？ | **能**；官方 CDN + sssekai 已跑通活动剧情 |
 | 是否有解密脚本？ | **有**；`sssekai abdecrypt` + 本仓库 `scenario_*` 脚本 |
 | 台词有无全局 ID？ | **无**（不像 UI `wordingKey`）；构建期用 `(scenarioId, 行序)`；运行时 `SetWordsInfo` 仅明文 → 当前 Frida 用 **`jp→zh` 哈希表** |
-| collision 原因 | 跨 scenario 重复句、JP/CN 版本差、同句多译；全局表只保留先写入译文 |
+| collision 原因 | 跨 scenario 重复句、同句多译；全局表先写入者优先，约 3.9% 行可能译错 |
+| 代码/结构有无根本错误？ | **无**；待改进的是版本对齐、重复 ID 告警、按行查表与真机 E2E |
 | 缓存是否入库？ | **否**；`i18n-data/cache/` 已在 `.gitignore` |
 
 ### 产物路径
@@ -132,7 +144,7 @@ Master 清单（`story-inventory`）：活动共有 **1498** 话；卡片共有 
 - [ ] 真机 `STORY_MODE=cn` E2E（114k 条表 + 活动剧情抽样）
 - [ ] 卡片剧情：`character/member/`（及 unitstory / actionset）按同路径扩展 filter
 - [ ] 行数不一致的 3 个 scenario：人工核对或 fallback 策略
-- [ ] 可选：Hook `ScenarioPlayer.SnippetActionTalk` 注入 `(scenarioId, lineIndex)`，消除 collision 歧义（见 text-rendering §对齐策略 C）
+- [ ] Hook `ScenarioPlayer.SnippetActionTalk` @ `0x624FC28` 注入 `(scenarioId, talkLineIdx)`（见 [ida-verification.md](./ida-verification.md)、[hook-strategy.md](./hook-strategy.md) §剧情运行时上下文）
 
 ### 相关笔记
 

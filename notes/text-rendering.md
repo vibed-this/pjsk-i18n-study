@@ -456,7 +456,7 @@ ReferenceIndex     — 由 ScenarioSnippet 引用进 Snippets 序列
 **C. 运行时上下文（精度最高）**
 
 - `SetWordsInfo` **没有** `scenarioId` 参数（仅 `characterId, displayName, words, …`）
-- 可在 `ScenarioPlayer.SnippetActionTalk` @ `0x6244D80` 设线程上下文 `(scenarioId, lineIndex)`，再供 `SetWordsInfo` 查 `story/{scenarioId}.json[line]`
+- 可在 `ScenarioPlayer.SnippetActionTalk` @ `0x624FC28` 设线程上下文 `(scenarioId, talkLineIdx)`，再供 `SetWordsInfo` 查 `story/by-scenario/{scenarioId}.json[line]`（日志跳转旁路：`ScenarioJumper.SnippetActionTalk` @ `0x6244D80`；详见 [ida-verification.md](./ida-verification.md) §剧情运行时 ID）
 - Zygisk 量产推荐 A 预构建 + C 作校验
 
 #### 5. 与现有 Hook / 数据的衔接

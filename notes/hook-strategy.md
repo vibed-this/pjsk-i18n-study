@@ -42,7 +42,8 @@ UI slot   → CustomTextMesh.SetText（ICustomText） @ 0x4F2B590   UpdateWordin
 
 | 层级 | 函数 | 优势 | 劣势 | Frida 验证 |
 |------|------|------|------|------------|
-| 剧情 | `SetWordsInfo` | 在打字机效果之前拦截；参数明确；调用者少 | 仅覆盖剧情对话 | ✅ 明文读取 + `[TEST]` 可见替换（cid=21） |
+| 剧情 | `SetWordsInfo` | 在打字机效果之前拦截；参数明确；调用者少 | 无 `scenarioId`；`bookmarkSequenceId`≠talk 行序 | ✅ 明文读取 + `[TEST]` 可见替换（cid=21） |
+| 剧情上下文 | `ScenarioPlayer.SnippetActionTalk` | 可写 `(scenarioId, talkLineIdx)` 供替换查表 | 协程工厂；跳转路径需另 Hook Jumper | ⏳ 待真机 |
 | UI | `WordingManager.GetImpl` | 一次 Hook 覆盖大部分词表 lookup；`onLeave` 可替换返回值 | 实现体非 metadata 独立符号，偏移需 IDA 定位 | ✅ `WORD_DECIDE` 等可见 `[TEST]` |
 | UI | `SetWordingText` | 直接拿到词表 key | 不经过此处的不覆盖 | ✅ key 读取 |
 | 兜底 | `CustomTextMesh.SetText` / slot | 覆盖显示链路末端 | 调用频繁；slot 与 impl 需分清 | ✅ 有调用 |
@@ -75,6 +76,60 @@ UI slot   → CustomTextMesh.SetText（ICustomText） @ 0x4F2B590   UpdateWordin
 | 国服 CN bundle | `sekai-assets-updater` `REGION=CN` 解同名 DB/EB；免烘焙，字形与国服一致 |
 
 **模式分岔**：`UI_MODE=cn` / `STORY_MODE=cn` 用全局替换；`STORY_MODE=dual` **不**替换主字体，改按 label 绑 SC（见 [dual-subtitle.md](./dual-subtitle.md) §6、[text-rendering.md](./text-rendering.md) §双语混排）。
+
+---
+
+## 剧情运行时上下文（2026-06-29）
+
+### 分析目标
+
+在 `SetWordsInfo` 替换时取得与 `story-build` 一致的 `(scenarioId, talkLineIdx)`，支持 `i18n/story/by-scenario/<id>.json[line]` 查表，避免 `jp→zh` 全局 collision。
+
+### 手段
+
+Il2CppDumper + IDA `MoveNext` 反汇编（见 [ida-verification.md](./ida-verification.md) §剧情运行时 ID）。
+
+### 过程
+
+**双 Hook 上下文传递**：
+
+```
+ScenarioPlayer.SnippetActionTalk @ 0x624FC28  onEnter → 写 STORY_CTX
+TalkWindow.SetWordsInfo          @ 0x6264FD8  onEnter → 读 STORY_CTX 查表替换
+```
+
+`SnippetActionTalk` `onEnter` 读取（`player=args[0]`，`snippet=args[1]`）：
+
+```javascript
+const scenarioId = readStr(readPtr(readPtr(player, 0x1B0), 0x18));
+const snippetIndex = snippet.add(0x10).readS32();
+const refIdx = snippet.add(0x1C).readS32();
+// talkLineIdx：遍历 scene.Snippets[]，按 Index 排序，对 Action==Talk 枚举行序
+// 匹配 snippetIndex — 与 story-build 一致；禁止简单 ++（跳过/重播会错位）
+const talkLineIdx = computeTalkLineIdx(player, snippet);
+```
+
+`SetWordsInfo` 额外可读 `args[5]` → `bookmarkSequenceId`（`player+0x380`），用于书签诊断，**不作** build 行序。
+
+**旁路**：剧情日志跳转走 `ScenarioJumper.SnippetActionTalk` @ `0x6244D80`（`sequenceId` 为 W2）；若回放不对齐，需同步 Hook 或回退 `jp→zh`。
+
+**数据表形态**（量产）：
+
+| 键 | 值 |
+|----|-----|
+| `${scenarioId}:${talkLineIdx}` | `{ name, body }` zh |
+| 或分文件 | `i18n/story/by-scenario/${scenarioId}.json` 数组下标 |
+
+### 结论
+
+| 方案 | 评价 |
+|------|------|
+| 仅 `jp→zh` 哈希（当前） | 实现简单；5364 collision |
+| **SnippetActionTalk 上下文 + 按行查表** | 精度最高；推荐 Zygisk 量产 |
+| 仅 `ReferenceIndex` | 与 build 行序不一致，不可用 |
+| 仅 `bookmarkSequenceId` / `sequenceId` | 时间轴序号，非 talk 行序 |
+
+**待办**：真机 `monitor` 打 `story_ctx` 事件，对照 `story-gap-report` 抽样验证 `talkLineIdx`。
 
 ---
 

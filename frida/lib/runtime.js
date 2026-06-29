@@ -77,6 +77,61 @@ function readIl2CppListSize(list) {
     }
 }
 
+function readIl2CppArrayLength(arr) {
+    if (!arr || arr.isNull()) return 0;
+    try {
+        const n = arr.add(IL2CPP_ARRAY_MAX_LENGTH).readS32();
+        return n >= 0 && n < 20000 ? n : 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
+function readIl2CppArrayElement(arr, index) {
+    if (!arr || arr.isNull() || index < 0) return null;
+    try {
+        const p = arr.add(IL2CPP_ARRAY_VECTOR + index * Process.pointerSize).readPointer();
+        return p && !p.isNull() ? p : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+// talkLineIdx：与 story-build extract_talk_lines 一致（Snippets 按 Index 排序后 Talk 行序）
+function computeTalkLineIdx(player, snippet) {
+    if (!player || player.isNull() || !snippet || snippet.isNull()) return -1;
+    const scene = readPtr(player, SCENARIO_PLAYER_SCENE);
+    if (!scene) return -1;
+    const arr = readPtr(scene, SCENARIO_SCENE_SNIPPETS);
+    const len = readIl2CppArrayLength(arr);
+    if (!len) return -1;
+    let curIndex = -1;
+    try {
+        curIndex = snippet.add(SCENARIO_SNIPPET_INDEX).readS32();
+    } catch (_) {
+        return -1;
+    }
+    const rows = [];
+    for (let i = 0; i < len; i++) {
+        const sn = readIl2CppArrayElement(arr, i);
+        if (!sn) continue;
+        try {
+            rows.push({
+                index: sn.add(SCENARIO_SNIPPET_INDEX).readS32(),
+                action: sn.add(SCENARIO_SNIPPET_ACTION).readS32(),
+            });
+        } catch (_) {}
+    }
+    rows.sort(function (a, b) { return a.index - b.index; });
+    let talkLine = -1;
+    for (let j = 0; j < rows.length; j++) {
+        if (rows[j].action !== SCENARIO_ACTION_TALK) continue;
+        talkLine++;
+        if (rows[j].index === curIndex) return talkLine;
+    }
+    return -1;
+}
+
 function describeFallbackList(fontAsset) {
     const list = readPtr(fontAsset, TMP_FONT_FALLBACK_LIST);
     if (!list) return { list: null, size: 0 };

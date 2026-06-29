@@ -109,6 +109,29 @@
 
 **结论**：剧情翻译 Hook 点 **`SetWordsInfo` 已完成 read + intercept E2E 验证**，可作为 Zygisk 剧情层实现依据。
 
+### 剧情运行时 ID 探测（2026-06-29 monitor）
+
+`monitor` 双 Hook：`ScenarioPlayer.SnippetActionTalk` @ `0x624FC28` + `SetWordsInfo` @ `0x6264FD8`。
+
+| 观测 | 结果 |
+|------|------|
+| `scenarioId` | `event_01_01` / `event_01_02` 可读 ✅ |
+| `bookmarkSequenceId` | ≈ **snippet `Index`**（6/7/8），≠ talk 行序 |
+| `snippetIndex` / `refIdx` | 与 cache `Snippets` 一致，可用于诊断 |
+
+**初版 bug（已修）**：`talkLine` 用会话内 `++` 计数。用户 **WORD_SKIP 跳到句中再重播** 时，计数与正文错位，例如：
+
+| 现象 | 原因 |
+|------|------|
+| `ctx=event_01_01:0` 却是 talk[2] 正文（`……最近、ずっと雨`） | 跳过后首次 Talk 仍从 0 计数 |
+| 重播后 `ん……` 显示 `:1`、第二句显示 `:2` | 计数未随 snippet Index 重置 |
+
+**修复**：`computeTalkLineIdx(player, snippet)` — 读 `scenarioScene.Snippets[]`，按 `Index` 排序后对 `Action==Talk` 枚举，与 `story.py` `extract_talk_lines` 同逻辑。日志追加 `snip=` / `ref=`。
+
+**待复测**：跳过后 `ctx` 是否稳定为 `event_01_01:2`；`ScenarioJumper` 书签路径。
+
+详见 [ida-verification.md](./ida-verification.md) §剧情运行时 ID、[hook-strategy.md](./hook-strategy.md) §剧情运行时上下文。
+
 ### 6. intercept UI 词表验证（2026-06-28，base=`0x7530bb4000`）
 
 脚本：`frida/run.py intercept`。UI 路径 Hook：

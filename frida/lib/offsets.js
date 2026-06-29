@@ -8,6 +8,8 @@ const PACKAGE = 'com.sega.pjsekai';
 const OFFSETS = {
     TMP_Text_set_text:                0xA8D1B98,
     TalkWindow_SetWordsInfo:          0x6264FD8,
+    ScenarioPlayer_SnippetActionTalk: 0x624FC28,  // 协程工厂；写剧情上下文
+    ScenarioJumper_SnippetActionTalk: 0x6244D80,  // 日志跳转旁路
     CustomTextMesh_SetWordingText:    0x4F2B408,
     CustomTextMesh_UpdateWordingText: 0x4F2B2EC,
     CustomTextMesh_SetText:           0x4F27530,  // CustomTextMesh.SetText（IDA 入口）
@@ -34,3 +36,16 @@ const FONT_MANAGER_FIELDS = [
 const TMP_FONT_FALLBACK_LIST = 0x138;
 const IL2CPP_LIST_ITEMS = 0x10;
 const IL2CPP_LIST_SIZE = 0x18;
+
+// ScenarioPlayer / ScenarioSceneData（6.5.5，见 notes/ida-verification.md §剧情运行时 ID）
+const SCENARIO_PLAYER_SCENE = 0x1B0;
+const SCENARIO_PLAYER_SEQUENCE_ID = 0x1B8;
+const SCENARIO_PLAYER_BOOKMARK_SEQ = 0x380;
+const SCENARIO_SCENE_ID = 0x18;
+const SCENARIO_SCENE_SNIPPETS = 0x58;
+const SCENARIO_SNIPPET_INDEX = 0x10;
+const SCENARIO_SNIPPET_ACTION = 0x14;
+const SCENARIO_SNIPPET_REF_INDEX = 0x1C;
+const SCENARIO_ACTION_TALK = 1;
+const IL2CPP_ARRAY_MAX_LENGTH = 0x18;
+const IL2CPP_ARRAY_VECTOR = 0x20;

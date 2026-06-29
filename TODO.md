@@ -31,6 +31,8 @@
 - [x] **probe 偏移**：`base=0x7530bb4000`，11/11 Hook 可执行（6.5.5）
 - [x] **剧情 `SetWordsInfo` 验证**（前缀模式，见 notes/frida.md §4–5）
 - [ ] **剧情 `STORY_MODE=cn` E2E**：`i18n/story/text.json`（114,859 条）真机活动剧情抽样
+- [~] **剧情运行时 ID 探测**：`computeTalkLineIdx` 已修（跳过不再 `++`）；待复测 WORD_SKIP + 顺序播放
+- [ ] **剧情 ctx 补测**：`ScenarioJumper` 书签跳转；无 ctx 的 `SetWordsInfo` fallback
 - [x] **UI 词表 `intercept` 验证**（`[TEST]` 前缀模式，见 notes/frida.md §6）
 - [x] **UI 拦截策略确定**：`WordingManager.GetImpl` `onLeave` + key lookup
 
@@ -42,6 +44,8 @@
 - [x] [notes/hook-strategy.md](notes/hook-strategy.md)：版本维护 / 注入框架 / 字体替换策略
 - [x] [notes/text-rendering.md](notes/text-rendering.md)：国服 diff / 字体策略 / 双语混排
 - [ ] 修正 [notes/ida-verification.md](notes/ida-verification.md)：`SetText` 调用方 `X1` 多为空
+- [x] [notes/ida-verification.md](notes/ida-verification.md)：剧情 `SetWordsInfo` 调用链 Capstone 复核（`0x6264F34` 参数布置、`+0x100` 字段、无直接 `BL`）
+- [x] [notes/story-pipeline.md](notes/story-pipeline.md)：结构与 collision 复核结论
 - [ ] 关闭 [notes/bg.md](notes/bg.md) 中过时开放问题
 
 ---

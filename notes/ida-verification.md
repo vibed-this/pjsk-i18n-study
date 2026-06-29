@@ -61,7 +61,7 @@ ARM64 参数：
 | `W5` | bookmarkSequenceId |
 | `W6` | emotion |
 
-行为：将 `words` 写入 `[this+0xA0]`，保留字符串引用后 tail-call 到 `Sekai_TalkWindow_AddLog`（`0x6268DD0`）。有 **5 处**直接代码引用。
+行为（6.5.5，Capstone 反汇编）：将处理后的 `words` 字符串引用写入 **`[this+0x100]`**（`add x21, x19, #0x100` → `str`），再经 IL2CPP 字符串处理链更新显示。**无直接 `BL` xref**（全库扫描 `bl #0x6264FD8` = 0；经 `MethodInfo::methodPointer` 间接调用）。IDA 符号入口 `0x6264FD8` 含 codegen 前缀，实际函数体约 **`0x62650C4`**。Hook 仍以 IDA 入口 `0x6264FD8` 为准（Frida 已 E2E 验证）。
 
 ### `Sekai_UI_CustomTextMesh_SetText` — 通用 TMP 文本设置
 
@@ -134,6 +134,103 @@ Il2CppDumper `script.json` 的 `Address` 与 `il2cpp_class_get_method_from_name`
 | `TMP_Text.set_text` | `0xA8D1BE8` | `0xA8D1B98` | codegen 前缀 |
 
 Zygisk 若采用运行时 `il2cpp_*` 解析，须与 [hook-strategy.md](./hook-strategy.md)「运行时 IL2CPP 解析」章节的混合策略配合，不可 blindly Hook `methodPointer`。
+
+---
+
+## 剧情运行时 ID（2026-06-29）
+
+### 分析目标
+
+确认运行时能否取得与 `story-build` 对齐的 `(scenarioId, talkLineIdx)`，以替代全局 `jp→zh` 哈希表、消除 collision。
+
+### 手段
+
+- `dump.cs`：`ScenarioPlayer`、`ScenarioSceneData`、`ScenarioSnippet`、`ScenarioJumper`
+- IDA：`ScenarioPlayer.<SnippetActionTalk>d__224.MoveNext`（`sub_62643DC`，主体自 `0x62643F0`）
+- Capstone 反汇编 `libil2cpp.so`（6.5.5；IDA MCP/Hex-Rays 不可用时的补充验证）
+
+### 过程
+
+#### 1. 无全局台词 ID
+
+| 层级 | 标识符 | 说明 |
+|------|--------|------|
+| 构建期 | `scenarioId` 字符串 + **talk 行序** | `story.py` 按 `Snippets` 中 `Action=Talk` 顺序 enumerate |
+| Asset JSON | `ScenarioSnippet.ReferenceIndex` | 指向 `TalkData[]` 下标，**≠** talk 行序 |
+| 运行时 `SetWordsInfo` | 仅 `characterId`、明文、`bookmarkSequenceId` | **无** `scenarioId` 参数 |
+
+#### 2. 调用链
+
+```
+ScenarioPlayer.SnippetActionTalk(snippet)     @ 0x624FC28  （协程工厂；读写 player+0x1C0 talkingSnippet）
+  → <SnippetActionTalk>d__224.MoveNext        @ 0x62643DC（主体 0x62643F0）
+      读 [snippet+0x1C] ReferenceIndex；读 TalkData 字段
+      → sub_6263F28 @ 0x6263F28               （从 talk 对象 +0x18/+0x28 取字段并做字符串处理）
+      → 参数布置 @ 0x6264F34                  （w1/x2/x3/x4/w5）
+      → 汇入 0x6264A04 → IL2CPP 间接调用
+      → TalkWindow.SetWordsInfo               @ 0x6264FD8
+
+ScenarioJumper.SnippetActionTalk(snippet, sequenceId)  @ 0x6244D80  （日志跳转/书签回放旁路）
+```
+
+> **修正（2026-06-29 Capstone）**：旧笔记写 `SetWordsInfo` 调用点在 **`0x6264A54`**；该地址实为 **il2cpp 静态初始化**（`ldr` + `bl #0x484ba94`），非 `SetWordsInfo` 调用。实际参数布置在 **`0x6264F34`**（`mov w1,w22` / `mov x3,x21` / `mov w5,w19`），经协程状态机间接分发，**无** `bl #SetWordsInfo` 直连。
+
+> `0x6244D80` 属 **`ScenarioJumper`**，非 `ScenarioPlayer`。主播放路径用 `0x624FC28` / `0x62643DC`。
+
+#### 3. `SetWordsInfo` 参数（MoveNext 出口 @ `0x6264F34`，6.5.5）
+
+| 寄存器 | 含义 | 来源 |
+|--------|------|------|
+| `X0` | `TalkWindow` this | 协程状态 / `[ScenarioPlayer+0x160]` 链 |
+| `W1` | `characterId` | `TalkCharacters[0].Character2dId` |
+| `X2` | `displayName` | `sub_6263F28` 处理后显示名 |
+| `X3` | `words` | `sub_6263F28` 处理后正文（**已做字符串处理，非原始 asset 明文**） |
+| `X4` | `voiceId` | snippet talk voice |
+| `W5` | **`bookmarkSequenceId`** | 协程状态传入（≈ snippet `Index`） |
+| `W6` | `emotion` | 常 0 |
+
+`BookmarkSequenceId` 为**时间轴 snippet 序号**（书签/跳过），与 `story-build` 的 **talk 行序** 不同。`{{playerName}}` 等占位符在 **`sub_6263F28` → `SetWordsInfo` 之前**处理，故 `STORY_MODE=cn` 扁平表查 `args[3]` 时须用**运行时最终明文**（或改 Hook 点提前拦截）。
+
+#### 4. `ScenarioPlayer` 关键字段（6.5.5，`dump.cs`）
+
+| 偏移 | 字段 | 用途 |
+|------|------|------|
+| `+0x1B0` | `scenarioScene` | `ScenarioSceneData*` |
+| `+0x1B8` | `sequenceId` | 当前 snippet 时间轴 ID（`CurrentSequenceId`） |
+| `+0x1C0` | `talkingSnippet` | 当前 Talk `ScenarioSnippet*` |
+| `+0x1D8` | `currentSnippet` | 当前 snippet |
+| `+0x2F0` | `EpisodeId` | Master **数值** episode ID，≠ `scenarioId` 字符串 |
+| `+0x380` | `BookmarkSequenceId` | 传入 `SetWordsInfo` W5 |
+
+`ScenarioSceneData`（`ScriptableObject`）：
+
+| 偏移 | 字段 |
+|------|------|
+| `+0x18` | `ScenarioId`（`string`，如 `event_01_01`） |
+| `+0x58` | `Snippets[]` |
+| `+0x60` | `TalkData[]` |
+
+`ScenarioSnippet`：
+
+| 偏移 | 字段 |
+|------|------|
+| `+0x10` | `Index` |
+| `+0x14` | `Action`（Talk = 1） |
+| `+0x1C` | `ReferenceIndex` → `TalkData` |
+
+### 结论
+
+| 问题 | 结论 |
+|------|------|
+| 能否从 `SetWordsInfo`  alone 拿到 ID？ | **不能**；无 `scenarioId`，`bookmarkSequenceId` 亦非 talk 行序 |
+| 推荐 Hook 点？ | **`ScenarioPlayer.SnippetActionTalk` `0x624FC28` `onEnter`**：写线程上下文，供 `SetWordsInfo` 消费 |
+| 如何拼 composite key？ | `scenarioId = readStr([player+0x1B0]+0x18)`；`talkLineIdx = computeTalkLineIdx(player, snippet)`（与 `story.py` `extract_talk_lines` 同逻辑） |
+| 日志跳转路径？ | 另 Hook **`ScenarioJumper.SnippetActionTalk` `0x6244D80`**（显式 `sequenceId` 参数 W2） |
+| 真机验证（2026-06-29） | 顺序播放时 `scenarioId` 正确；**`++` 计数在 WORD_SKIP 后错位**（已改 `computeTalkLineIdx`） |
+| `bookmarkSequenceId` | ≈ snippet `Index`（6/7/8），≠ talk 行序 |
+| 待复测 | 跳过后 `computeTalkLineIdx`；`ScenarioJumper` 路径 |
+
+实现策略见 [hook-strategy.md](./hook-strategy.md) §剧情运行时上下文。
 
 ## 相关笔记
 
