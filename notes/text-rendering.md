@@ -479,7 +479,7 @@ ReferenceIndex     — 由 ScenarioSnippet 引用进 Snippets 序列
 | 最小可行路径 | assets-updater 拉 CN scenario → 按 `scenarioId`+行序生成 `jp→zh` → `SetWordsInfo` 替换 |
 | 主要风险 | 版本漂移（行数不一致）、JP 独占剧情、占位符与富文本、CJK 字体 |
 
-**下一步（游戏下载前可准备）**：在 `i18n-tools` 增加 `story` 构建子命令；Master diff 生成「共有 / 仅日服 `scenarioId` 清单」；真机用已验证的 `SetWordsInfo` Hook 接表。
+**下一步**：活动剧情路径 A 已跑通（114,859 条 `jp→zh`，见 [story-pipeline.md](./story-pipeline.md)）；待卡片 `character/member/` 扩展与真机 `STORY_MODE=cn` E2E。
 
 ## UI 文本覆盖分层（2026-06-28 静态分析）
 

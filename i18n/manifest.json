@@ -16,20 +16,20 @@
     "entry_count": 4838,
     "plain_text_count": 3440,
     "story_text": "i18n/story/text.json",
-    "story_text_sha256": "13fe938fb45e820672fad3dca3b8a4d214f2f3aec5ae6807be3d8fc892d0700c",
-    "story_text_count": 3
+    "story_text_sha256": "2261bf82c1c1587275f974d82cd304e2f388a34027dbc9da1b22749ad27e2e8d",
+    "story_text_count": 114859
   },
   "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText); story jp→zh (SetWordsInfo)",
   "story": {
-    "demo": true,
-    "built_at": "2026-06-28T16:10:11+00:00",
+    "demo": false,
+    "built_at": "2026-06-29T01:13:59+00:00",
     "stats": {
-      "scenarios_processed": 1,
-      "scenarios_aligned": 1,
-      "body_pairs": 2,
-      "name_pairs": 1,
-      "text_entries": 3,
-      "collision_count": 0
+      "scenarios_processed": 1498,
+      "scenarios_aligned": 1495,
+      "body_pairs": 113529,
+      "name_pairs": 1330,
+      "text_entries": 114859,
+      "collision_count": 5364
     },
     "inventory": {
       "jp_card_episodes": 2670,

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from pathlib import Path
 
 from .build import build_ui_pack
 from .fetch import fetch_all
 from .font_chars import build_font_charset_files
 from .story import build_story_pack, fetch_scenario_inventory
+from .story_stats import collect_story_targets, run_story_stats
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
@@ -52,6 +55,73 @@ def cmd_story_inventory(args: argparse.Namespace) -> int:
     inv = fetch_scenario_inventory()
     counts = inv["counts"]
     print(f"[+] scenario inventory → common={counts['common']} jp_only={counts['jp_only']}")
+    return 0
+
+
+def cmd_story_stats(args: argparse.Namespace) -> int:
+    if args.list_only:
+        targets = collect_story_targets()
+        print(f"[+] story targets: {len(targets)} scenario URLs")
+        by_type: dict[str, int] = {}
+        for t in targets:
+            by_type[t.story_type] = by_type.get(t.story_type, 0) + 1
+        for key in sorted(by_type):
+            print(f"    {key}: {by_type[key]}")
+        return 0
+
+    report = run_story_stats(
+        concurrency=args.concurrency,
+        limit=args.limit,
+        sample_per_type=args.sample_per_type,
+        sample_seed=args.sample_seed,
+    )
+    print(f"[+] scenarios: {report['scenarios_ok']}/{report['scenarios_total']} ok")
+    if report["scenarios_failed"]:
+        print(f"[!] failed: {report['scenarios_failed']}")
+    if "sample" in report:
+        pop = report["sample"]["population_total"]
+        print(
+            f"[+] sample mode: {args.sample_per_type}/type "
+            f"(population {pop} scenarios)"
+        )
+    print(f"[+] talk lines: {report['talk_lines']}")
+    print(f"[+] fullscreen lines: {report['fullscreen_lines']}")
+    print(f"[+] chars body: {report['chars_body']:,}")
+    print(f"[+] chars name: {report['chars_name']:,}")
+    print(f"[+] chars fullscreen: {report['chars_fullscreen']:,}")
+    print(f"[+] chars dialogue (body+name): {report['chars_dialogue']:,}")
+    print(f"[+] chars total (dialogue+fullscreen): {report['chars_total']:,}")
+    print(f"[+] unique body strings: {report['unique_body_strings']:,}")
+    print(f"[+] unique name strings: {report['unique_name_strings']:,}")
+    print("[+] by type (sample):")
+    for key in sorted(report["by_type"]):
+        row = report["by_type"][key]
+        chars = row["chars_body"] + row["chars_name"] + row["chars_fullscreen"]
+        print(
+            f"    {key}: ok={row['scenarios_ok']} lines={row['talk_lines']} chars={chars:,}"
+        )
+    if "estimate" in report:
+        est = report["estimate"]["total"]
+        print("[+] extrapolated estimate (JP full corpus):")
+        print(f"    scenarios: {est['scenarios']:,}")
+        print(f"    talk lines: {est['talk_lines']:,}")
+        print(f"    chars body: {est['chars_body']:,}")
+        print(f"    chars name: {est['chars_name']:,}")
+        print(f"    chars dialogue: {est['chars_dialogue']:,}")
+        print(f"    chars total: {est['chars_total']:,}")
+        print("[+] estimate by type:")
+        for key in sorted(report["estimate"]["by_type"]):
+            row = report["estimate"]["by_type"][key]
+            print(
+                f"    {key}: pop={row['population']} "
+                f"~{row['est_chars_total']:,} chars "
+                f"({row['est_talk_lines']:,} lines)"
+            )
+    if args.json_out:
+        Path(args.json_out).write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"[+] report → {args.json_out}")
     return 0
 
 
@@ -137,6 +207,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="also write i18n/story/by-scenario/<id>.json",
     )
     p_story.set_defaults(func=cmd_story_build)
+
+    p_stats = sub.add_parser(
+        "story-stats",
+        help="count JP story dialogue chars from sekai.best scenario assets",
+    )
+    p_stats.add_argument("--list-only", action="store_true", help="only list scenario URL counts")
+    p_stats.add_argument("--limit", type=int, default=None, help="process first N scenarios only")
+    p_stats.add_argument(
+        "--sample-per-type",
+        type=int,
+        default=None,
+        help="stratified random sample: N scenarios per story type, then extrapolate",
+    )
+    p_stats.add_argument("--sample-seed", type=int, default=42, help="RNG seed for --sample-per-type")
+    p_stats.add_argument("--concurrency", type=int, default=32, help="parallel HTTP fetches")
+    p_stats.add_argument("--json-out", default=None, help="write full JSON report to path")
+    p_stats.set_defaults(func=cmd_story_stats)
 
     return parser
 

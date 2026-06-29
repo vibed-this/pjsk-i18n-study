@@ -93,6 +93,28 @@ frida/
     ├── patch_apk.ps1 / install.ps1 / connect.ps1
     ├── tools/                   # apktool, libfrida-gadget.so, debug.keystore
     └── out/                     # 签名后的 *.gadget.apk
+
+i18n/                            # 提交 git 的翻译包
+├── manifest.json
+├── ui/wordings.json
+├── ui/plain-text.json
+├── story/text.json              # 剧情 jp→zh（story-build 产出）
+└── reports/story-gap-report.json
+
+i18n-data/                       # 管线数据（cache 不入库）
+├── cache/
+│   ├── wordings-{jp,cn}.json    # UI 词表缓存
+│   ├── scenario-inventory.json  # Master scenarioId 交叉统计
+│   ├── abcache-{jp,cn}.db       # sssekai abcache 索引
+│   ├── ab-raw/{jp,cn}/          # 加密 AssetBundle
+│   ├── ab-dec/{jp,cn}/          # XOR 解密后 bundle
+│   └── scenario/{jp,cn}/        # ScenarioSceneData JSON
+├── fixtures/scenario/           # story-build --demo
+└── font/                        # 字体子集源（见 i18n-data/font/README.md）
+
+i18n-tools/scripts/
+├── scenario_abcache_download.py # sssekai abcache 封装
+└── scenario_from_bundles.py     # UnityPy 提取 scenario JSON
 ```
 
 ## 相关笔记
@@ -100,3 +122,4 @@ frida/
 - [frida.md](./frida.md) — gadget 补丁与联调流程
 - [ref.md](./ref.md) — 外部参考资料汇总
 - [hook-strategy.md](./hook-strategy.md) — 下一步实施方向
+- [story-pipeline.md](./story-pipeline.md) — 剧情 CDN dump 与 story-build

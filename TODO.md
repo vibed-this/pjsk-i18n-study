@@ -30,6 +30,7 @@
 - [ ] **主界面 `monitor` 补测**：`TMP_Text.set_text` 在主界面调用与读串
 - [x] **probe 偏移**：`base=0x7530bb4000`，11/11 Hook 可执行（6.5.5）
 - [x] **剧情 `SetWordsInfo` 验证**（前缀模式，见 notes/frida.md §4–5）
+- [ ] **剧情 `STORY_MODE=cn` E2E**：`i18n/story/text.json`（114,859 条）真机活动剧情抽样
 - [x] **UI 词表 `intercept` 验证**（`[TEST]` 前缀模式，见 notes/frida.md §6）
 - [x] **UI 拦截策略确定**：`WordingManager.GetImpl` `onLeave` + key lookup
 
@@ -60,7 +61,7 @@
 - [x] **Master 明文映射**：`pjsk-i18n build` → `i18n/ui/plain-text.json`（3440 jp→zh，musics/characters/cards/vocals/profiles）
 - [x] **`intercept.js` cn + SetText**：`UI_PLAIN_TEXT` 明文 lookup；`CustomText.SetText(slot)` Hook
 - [ ] `overrides/ui.yaml`：`MSG_STARTAPP_*`、日服独有 306 key（见 `i18n/reports/gap-report.json`）
-- [~] **剧情国服挪用**：管线 + Frida `STORY_MODE=cn` 已接入；全量构建 **搁置**（需 `cache/scenario/`，见下）
+- [~] **剧情国服挪用**：活动剧情 **event_story** 已 dump+build（114,859 条）；Frida `STORY_MODE=cn` 已接入；**待**卡片 `character/member/` + 真机 E2E（见 [notes/story-pipeline.md](notes/story-pipeline.md)）
 - [x] 剧情 gap 清单：`story-inventory` → common=3882 / jp_only=476（`i18n-data/cache/scenario-inventory.json`）
 - [ ] 翻译包热更新路径（manifest checksum 已有）
 
@@ -91,7 +92,7 @@
 
 - [ ] 游戏更新后：Il2CppDumper → IDA → `offsets.js` → `probe`（见 hook-strategy §版本更新）
 - [ ] diff 更新后：`pjsk-i18n build` 并核对 `gap-report`
-- [ ] AssetBundle XOR 解密脚本化
+- [x] AssetBundle XOR 解密脚本化（`sssekai abdecrypt` + `i18n-tools/scripts/scenario_*`）
 
 ---
 
@@ -102,12 +103,13 @@
 - [x] Frida `lib/` + `scripts/` + `run.py`；剧情 + UI `[TEST]` intercept E2E
 - [x] 词表静态链路、国服 CN diff 调研、i18n-tools 构建管线
 - [x] 字体策略定案：初步汉化**替换主字体**（非 fallback 补字）；双语混排笔记
+- [x] 剧情路径 A：官方 CDN → scenario JSON → `story-build`（活动 1498 话，114,859 `jp→zh`）
 
 ---
 
 ## 搁置 / 阻塞
 
-- [-] **剧情全量构建**：需 `sekai-assets-updater` JP+CN scenario → `cache/scenario/`
+- [-] **剧情卡片/unit 构建**：活动 `event_story` 已完成；卡片 `character/member/`、unitstory、actionset 待按 [story-pipeline.md](notes/story-pipeline.md) 扩展 filter
 - [-] 模拟器 frida-server；Master 缓存解密；内置词表提取脚本
 
 ---
@@ -118,7 +120,14 @@
 uv sync
 
 uv run --project i18n-tools pjsk-i18n build
+uv run --project i18n-tools pjsk-i18n build --with-story
+uv run --project i18n-tools pjsk-i18n story-inventory
+uv run --project i18n-tools pjsk-i18n story-build
 uv run --project i18n-tools pjsk-i18n font-chars
+
+# 剧情 scenario 提取（需 sssekai + UnityPy；缓存见 i18n-data/cache/）
+python i18n-tools/scripts/scenario_abcache_download.py --region jp --filter "^event_story/.*/scenario$" ...
+python i18n-tools/scripts/scenario_from_bundles.py i18n-data/cache/ab-dec/jp i18n-data/cache/scenario/jp
 
 # Unity 烘焙（Hub 打开 i18n-tools/font-bake-unity）
 cd i18n-tools\font-bake-unity

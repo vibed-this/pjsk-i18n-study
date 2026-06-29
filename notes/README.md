@@ -11,4 +11,5 @@
 | Hook 策略 | [hook-strategy.md](./hook-strategy.md) | 分层 Hook、版本偏移维护、Zygisk/运行时解析 |
 | Frida 动态分析 | [frida.md](./frida.md) | gadget 补丁、联调步骤 |
 | 剧情双语字幕 | [dual-subtitle.md](./dual-subtitle.md) | 双轨字幕可行性、打字机冲突（暂缓） |
+| 剧情 dump/build | [story-pipeline.md](./story-pipeline.md) | 官方 CDN → scenario JSON → story-build |
 | 工具链与产物 | [toolchain.md](./toolchain.md) | 环境状态、产物路径索引 |
