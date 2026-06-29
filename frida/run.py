@@ -31,6 +31,7 @@ FONT_BUNDLE_LOCAL = REPO_ROOT / "i18n" / "font" / "source-han-fallback.bundle"
 DEVICE_FONT_BUNDLE = f"/sdcard/Android/data/{PACKAGE}/files/i18n/font/source-han-fallback.bundle"
 FONT_ASSET_NAME = "SourceHanSansSC-Regular SDF"
 FONT_EXTRA_LIBS = ("il2cpp_unity.js", "font_inject.js")
+STORY_PATCH_LIBS = ("story_patch.js",)
 
 MODES = ("intercept", "monitor", "probe", "font")
 
@@ -111,6 +112,8 @@ def intercept_cfg(args: argparse.Namespace) -> dict:
     if args.story_mode == "dual":
         cfg = {
             "STORY_MODE": "dual",
+            "STORY_PATCH_ATTACH": True,
+            "STORY_SET_WORDS_FALLBACK": True,
             "DUAL_STYLE": args.dual_style,
             "INTERCEPT": {"TMP": False, "STORY": True, "UI": False},
             "FONT_INJECT": args.font_inject,
@@ -120,7 +123,13 @@ def intercept_cfg(args: argparse.Namespace) -> dict:
         return cfg
     ui_mode = "cn" if load_ui_wordings() else "prefix"
     story_mode = "cn" if load_story_text() else "prefix"
-    cfg: dict = {"STORY_MODE": story_mode, "UI_MODE": ui_mode, "FONT_INJECT": args.font_inject}
+    cfg: dict = {
+        "STORY_MODE": story_mode,
+        "UI_MODE": ui_mode,
+        "FONT_INJECT": args.font_inject,
+        "STORY_PATCH_ATTACH": story_mode == "cn",
+        "STORY_SET_WORDS_FALLBACK": False,
+    }
     if ui_mode == "prefix" or story_mode == "prefix":
         cfg["PREFIX"] = args.prefix
     if args.font_inject:
@@ -167,6 +176,30 @@ def fmt_intercept(p: dict) -> str:
     ])
 
 
+def fmt_story_patch(p: dict) -> str:
+    sid = p.get("scenarioId", "?")
+    line = p.get("line", "?")
+    body = p.get("jpBody") or ""
+    zh = p.get("zhBody") or ""
+    if len(body) > 80:
+        body = body[:80] + "…"
+    if len(zh) > 80:
+        zh = zh[:80] + "…"
+    return "\n".join([
+        f"── story_patch {sid}:{line}",
+        f"   JP: {body!r}",
+        f"   ZH: {zh!r}",
+    ])
+
+
+def fmt_story_patch_summary(p: dict) -> str:
+    return (
+        f"── story_patch_summary {p.get('scenarioId')!r} "
+        f"lines={p.get('lines')} patched={p.get('patched')} "
+        f"backup={p.get('backedUp', 0)} mode={p.get('mode')!r}"
+    )
+
+
 def fmt_capture(p: dict) -> str:
     tag = p.get("tag", "?")
     lines = [f"── capture [{tag}]"]
@@ -180,10 +213,16 @@ def fmt_capture(p: dict) -> str:
 
 
 def run_intercept(args: argparse.Namespace) -> int:
-    extra_libs = FONT_EXTRA_LIBS if args.font_inject else None
+    icfg = intercept_cfg(args)
+    extra: list[str] = []
+    if icfg.get("STORY_PATCH_ATTACH"):
+        extra.extend(STORY_PATCH_LIBS)
+    if args.font_inject:
+        extra.extend(FONT_EXTRA_LIBS)
+    extra_libs = tuple(extra) if extra else None
     if args.font_inject:
         push_font_bundle()
-    js = load_script("intercept", cfg_override=intercept_cfg(args), extra_libs=extra_libs)
+    js = load_script("intercept", cfg_override=icfg, extra_libs=extra_libs)
     intercepts: list[dict] = []
     captures: list[dict] = []
     stats: list[dict] = []
@@ -209,9 +248,12 @@ def run_intercept(args: argparse.Namespace) -> int:
             font_bits = ""
             if p.get("fontInject"):
                 font_bits = f" fontMode={p.get('fontMode')!r}"
+            patch_bits = ""
+            if p.get("storyPatchAttach"):
+                patch_bits = " storyPatch=AttachSceneData"
             print(
                 f"[*] ready storyMode={p.get('storyMode')!r} uiMode={p.get('uiMode')!r}"
-                f"{font_bits} "
+                f"{patch_bits}{font_bits} "
                 f"uiWordings={p.get('uiWordings')} uiPlainText={p.get('uiPlainText')} "
                 f"storyText={p.get('storyText')} "
                 f"demoKeys={p.get('demoKeys')}",
@@ -219,6 +261,10 @@ def run_intercept(args: argparse.Namespace) -> int:
             )
         elif ev == "font_inject":
             print(fmt_font_inject(p), flush=True)
+        elif ev == "story_patch":
+            print(fmt_story_patch(p), flush=True)
+        elif ev == "story_patch_summary":
+            print(fmt_story_patch_summary(p), flush=True)
         elif ev in ("hook", "il2cpp", "error"):
             print(json.dumps(p, ensure_ascii=False), flush=True)
 
@@ -238,7 +284,8 @@ def run_intercept(args: argparse.Namespace) -> int:
                     parts_msg.append(f"plain {len(p)}")
                 if s:
                     parts_msg.append(f"story {len(s)}")
-                print(f"国服词表 — {' + '.join(parts_msg)}；SetWordsInfo 按日文明文", flush=True)
+                patch_note = "AttachSceneData patch" if s and icfg.get("STORY_PATCH_ATTACH") else "SetWordsInfo 按日文明文"
+                print(f"国服词表 — {' + '.join(parts_msg)}；剧情 {patch_note}", flush=True)
             else:
                 print("拦截演示 — 屏幕应出现前缀，终端同步打印（未找到 i18n/ui/wordings.json）", flush=True)
         print("=" * 60, flush=True)

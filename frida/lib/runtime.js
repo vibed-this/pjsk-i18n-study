@@ -97,6 +97,59 @@ function readIl2CppArrayElement(arr, index) {
     }
 }
 
+function writeStringField(obj, offset, text) {
+    if (!obj || obj.isNull() || !text) return false;
+    const rep = makeStr(text);
+    if (!rep || rep.isNull()) return false;
+    try {
+        obj.add(offset).writePointer(rep);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+// 与 story-build extract_talk_lines 一致：Snippets 按 Index 排序后枚举 Talk 行
+function enumerateScenarioTalkLines(scene) {
+    if (!scene || scene.isNull()) return [];
+    const snippets = readPtr(scene, SCENARIO_SCENE_SNIPPETS);
+    const talkArr = readPtr(scene, SCENARIO_SCENE_TALK_DATA);
+    const len = readIl2CppArrayLength(snippets);
+    if (!len) return [];
+    const rows = [];
+    for (let i = 0; i < len; i++) {
+        const sn = readIl2CppArrayElement(snippets, i);
+        if (!sn) continue;
+        try {
+            rows.push({
+                index: sn.add(SCENARIO_SNIPPET_INDEX).readS32(),
+                action: sn.add(SCENARIO_SNIPPET_ACTION).readS32(),
+                refIdx: sn.add(SCENARIO_SNIPPET_REF_INDEX).readS32(),
+                snippet: sn,
+            });
+        } catch (_) {}
+    }
+    rows.sort(function (a, b) { return a.index - b.index; });
+    const out = [];
+    let talkLineIdx = 0;
+    for (let j = 0; j < rows.length; j++) {
+        if (rows[j].action !== SCENARIO_ACTION_TALK) continue;
+        const talk = readIl2CppArrayElement(talkArr, rows[j].refIdx);
+        if (!talk) {
+            talkLineIdx++;
+            continue;
+        }
+        out.push({
+            talkLineIdx: talkLineIdx,
+            talk: talk,
+            refIdx: rows[j].refIdx,
+            snippet: rows[j].snippet,
+        });
+        talkLineIdx++;
+    }
+    return out;
+}
+
 // talkLineIdx：与 story-build extract_talk_lines 一致（Snippets 按 Index 排序后 Talk 行序）
 function computeTalkLineIdx(player, snippet) {
     if (!player || player.isNull() || !snippet || snippet.isNull()) return -1;

@@ -53,7 +53,9 @@ UI slot   → CustomTextMesh.SetText（ICustomText） @ 0x4F2B590   UpdateWordin
 ## 结论
 
 - 静态 + 动态验证表明：**首选 Hook 点的 IDA 偏移在真机运行时正确**，可作为 Zygisk native Hook 的地址依据。
-- UI 拦截主点：**`WordingManager.GetImpl` `onLeave`**；辅以 `CustomTextMesh.SetText` / slot 与 `SetWordingText`（读 key）。剧情首选 `SetWordsInfo`。
+- UI **量产**（已定）：**`WordingManager.GetImpl` `onLeave`** + `wordings.json` 查表；有 `wordingKey`，**不必**改 `AddMasterWording` 数据源（见 [text-rendering.md](./text-rendering.md) §6、[ida-verification.md](./ida-verification.md) §UI 词表加载链）。
+- UI **兜底**：`CustomTextMesh.SetText` / slot（Master 明文）；`SetWordingText`（读 key 诊断）。
+- 剧情 **当前焦点**：scenario **bundle 载入层** patch / JP 备份（见 §剧情数据源 patch）；`SetWordsInfo` 作过渡或兜底。
 - **初步汉化字体策略（2026-06-29 定案）**：**替换主字体**，不用「日文字体主 + fallback 补字」。
 - 理由：TMP 主字体有字形时不会走 fallback；日文字形与简中写法在大量统一码位上不同，fallback 只能消 tofu，无法保证简中字形一致。
 - 实现概要：`SetupBuiltinFontAsset` **onLeave** 将 `FontAssetManager+0x20`（EB）、`+0x38`（DB）指针换为 **思源黑体 SC** 子集（或国服 CN `TMP_FontAsset`）；原 EB/DB **降级**为新字体的 `fallbackFontAssetTable`（`[font+0x138]`），兜底未翻译日文、假名、日字特化字形。
@@ -130,6 +132,75 @@ const talkLineIdx = computeTalkLineIdx(player, snippet);
 | 仅 `bookmarkSequenceId` / `sequenceId` | 时间轴序号，非 talk 行序 |
 
 **待办**：真机 `monitor` 打 `story_ctx` 事件，对照 `story-gap-report` 抽样验证 `talkLineIdx`。
+
+---
+
+## UI 词表：展示层查表即可（2026-06-29，定案）
+
+### 结论
+
+UI 有 **`wordingKey`**，真机已验证 **`GetImpl` `onLeave` + `wordings.json`** 足够量产；**不必**在 `AddMasterWording` / `dictionary` 做数据源 patch（工程收益小、Master 缓存/时机复杂）。曾调研的加载链见 [ida-verification.md](./ida-verification.md) §UI 词表加载链（归档）。
+
+| 内容 | 推荐 |
+|------|------|
+| UI 词表 | `GetImpl` / `GetFormat` 查表 |
+| UI Master 明文 | `SetText` + `plain-text.json` |
+| 剧情 | **bundle 载入层**（§剧情数据源 patch），非 UI 路线 |
+
+---
+
+## 剧情数据源 patch（2026-06-29，当前焦点）
+
+### 分析目标
+
+剧情**无 `wordingKey`**，全局 `jp→zh` 有 collision；将注入点前移到 **scenario bundle 载入后**，对 `TalkData` patch 或备份 JP，供单行简中与双语字幕共用。
+
+### 手段
+
+- 离线表：`i18n/story/text.json` / `by-scenario`（[story-pipeline.md](./story-pipeline.md)）
+- 运行时结构：`ScenarioSceneData`、`TalkData`（dump.cs）；`ScenarioPlayer` 播放链
+- 过渡：`SetWordsInfo` + `SnippetActionTalk` 上下文（§剧情运行时上下文）
+
+### 过程
+
+**推荐管线（`STORY_MODE=cn`）**
+
+```
+scenario bundle load → ScenarioSceneData 进内存
+  → [Hook] 识别 scenarioId
+  → 按 talkLineIdx 查 story 表
+  → patch TalkData.Body / WindowDisplayName（cn）
+     或深拷贝 JP 备份（dual 用）
+  → ScenarioPlayer 原生播放
+```
+
+**模式分岔**
+
+| 模式 | live `TalkData` | 备份 |
+|------|-----------------|------|
+| `cn` | 可 patch 为 zh | 可选 |
+| `dual` | **保持 JP** | **必需**；译文走双 label（[dual-subtitle.md](./dual-subtitle.md)） |
+
+**与 `SetWordsInfo` 关系**
+
+| 方案 | 评价 |
+|------|------|
+| 仅 `SetWordsInfo` + 全局 `jp→zh` | 已实现；有 collision |
+| `SetWordsInfo` + `(scenarioId, line)` ctx | 精度高；每次台词 Hook |
+| **bundle load patch** | 一次写入；量产主路径；**Frida 原型已接入**（`story_patch.js`） |
+
+### 结论
+
+| 问题 | 结论 |
+|------|------|
+| IDA（6.5.5） | 载入链 + 布局已验证，见 [ida-verification.md](./ida-verification.md) §剧情 bundle 载入链 |
+| 首选 Hook | **`ScenarioPlayer.AttachSceneData` `0x624C100` `onEnter`**（`X1`=`ScenarioSceneData*`） |
+| 备选 Hook | `ScreenLayerScenario.OnFinishLoadScenario` `0x63E1F80`（`BundleElement+0x20`） |
+| 运行时类型 | JSON `TalkData` = **`ScenarioSnippetTalk[]`** @ `scene+0x60`；正文 `+0x20`，显示名 `+0x18` |
+| Frida 原型 | ✅ `story_patch.js` @ `AttachSceneData`（cn patch + dual JP 备份） |
+| 下一步 | 真机 `STORY_MODE=cn` E2E（维护后）；可选 `by-scenario` 按行表 |
+| 双语 | 备份 JP + 双 label；**不能**仅靠把 Body 改成纯中文 |
+| UI | **不同线**；继续 `Get` 查表 |
 
 ---
 

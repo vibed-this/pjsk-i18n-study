@@ -23,6 +23,8 @@ const CFG = Object.assign({
     PREFIX: '[TEST] ',
     UI_MODE: 'prefix',  // 'cn' | 'prefix' — run.py sets 'cn' when wordings.json loaded
     STORY_MODE: 'prefix',   // 'prefix' | 'cn' | 'dual'
+    STORY_PATCH_ATTACH: false, // cn/dual：AttachSceneData 数据源 patch（见 story_patch.js）
+    STORY_SET_WORDS_FALLBACK: true, // false = cn 时仅数据源 patch，不 Hook SetWordsInfo 替换
     DUAL_STYLE: 'plain',    // 'plain' | 'rich'
     DUAL_PLACEHOLDER: '译',
     DUAL_TAG: '[[',         // 译文行以 [[...]] 包裹；用开头检测防重复
@@ -211,7 +213,14 @@ function install() {
         });
     }
 
-    if (CFG.INTERCEPT.STORY) {
+    if (typeof installStoryAttachHook === 'function') {
+        installStoryAttachHook(stats, CFG);
+    }
+
+    const storySetWordsHook = CFG.INTERCEPT.STORY
+        && !(CFG.STORY_MODE === 'cn' && CFG.STORY_PATCH_ATTACH && !CFG.STORY_SET_WORDS_FALLBACK);
+
+    if (storySetWordsHook) {
         hookAt('TalkWindow.SetWordsInfo', OFFSETS.TalkWindow_SetWordsInfo, {
             onEnter(args) {
                 stats.story++;
@@ -349,6 +358,8 @@ function install() {
     emit('ready', {
         mode: 'intercept',
         storyMode: CFG.STORY_MODE,
+        storyPatchAttach: CFG.STORY_PATCH_ATTACH,
+        storySetWordsFallback: CFG.STORY_SET_WORDS_FALLBACK,
         uiMode: CFG.UI_MODE,
         fontInject: CFG.FONT_INJECT,
         fontMode: CFG.FONT_MODE || 'replace',

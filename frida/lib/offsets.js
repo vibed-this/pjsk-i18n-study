@@ -21,6 +21,8 @@ const OFFSETS = {
     WordingManager_GetFormat:         0x602F054,  // GetFormat(key, args)
     FontAssetManager_SetupBuiltinFontAsset: 0x61028AC,
     FontAssetManager_ClearFallbackFontAsset: 0x61024F8,  // 清空 TMP_FontAsset.fallbackFontAssetTable
+    ScenarioPlayer_AttachSceneData:       0x624C100,  // 剧情 bundle patch 首选（见 ida-verification §剧情 bundle）
+    ScreenLayerScenario_OnFinishLoadScenario: 0x63E1F80,
 };
 
 // FontAssetManager @ 6.5.5（IDA SetupBuiltinFontAsset 反汇编）
@@ -43,6 +45,12 @@ const SCENARIO_PLAYER_SEQUENCE_ID = 0x1B8;
 const SCENARIO_PLAYER_BOOKMARK_SEQ = 0x380;
 const SCENARIO_SCENE_ID = 0x18;
 const SCENARIO_SCENE_SNIPPETS = 0x58;
+const SCENARIO_SCENE_TALK_DATA = 0x60; // ScenarioSnippetTalk[]（JSON 称 TalkData）
+const SCENARIO_SNIPPET_TALK_NAME = 0x18; // WindowDisplayName
+const SCENARIO_SNIPPET_TALK_BODY = 0x20;
+const SCENARIO_PLAYER_ATTACH_SCENE_DATA = 0x624C100;
+const SCREEN_LAYER_ON_FINISH_LOAD_SCENARIO = 0x63E1F80;
+const BUNDLE_ELEMENT_LOADED_RESOURCE = 0x20;
 const SCENARIO_SNIPPET_INDEX = 0x10;
 const SCENARIO_SNIPPET_ACTION = 0x14;
 const SCENARIO_SNIPPET_REF_INDEX = 0x1C;

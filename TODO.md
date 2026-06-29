@@ -9,15 +9,15 @@
 
 ## 当前焦点
 
-**CJK 字体注入（P5）** — Frida **主字体替换**与 Unity 烘焙管线已落地；**待**：`bake.ps1` 产出 bundle → 真机 `font --inject` / `intercept --font-inject` 验收无 tofu。
+**剧情数据源 patch（scenario bundle 载入层）** — UI 有 `wordingKey`，继续 **`GetImpl` 查表** 即可（不必改 Master 加载链）。剧情无唯一 key，主攻 **bundle 载入后 patch / 备份 `TalkData`**；见 [notes/hook-strategy.md](notes/hook-strategy.md) §剧情数据源 patch、[notes/story-pipeline.md](notes/story-pipeline.md) §运行时注入。
 
-**下一步**：
+**下一步**（游戏维护结束后）：
 
-1. `cd i18n-tools/font-bake-unity && .\bake.ps1` → `i18n/font/source-han-fallback.bundle`
-2. 真机冷启动 + `uv run python frida/run.py intercept --font-inject --duration 120`
-3. 补测 legacy `CustomText`（Unity `Text`）是否仍 tofu
+1. **真机 E2E**：`uv run python frida/run.py intercept --duration 180` → 进活动剧情 → 核对 `story_patch_summary` / 屏幕简中（见 [notes/frida.md](notes/frida.md) §8）
+2. 备选 Hook：`OnFinishLoadScenario` @ `0x63E1F80`（缓存层，见 [ida-verification.md](notes/ida-verification.md) §剧情 bundle）
+3. 双语（P2）：`--story-mode dual` 验证 JP 备份 + 双 label（[notes/dual-subtitle.md](notes/dual-subtitle.md)）
 
-详见 [notes/hook-strategy.md](notes/hook-strategy.md) §字体、[i18n-data/font/README.md](i18n-data/font/README.md)。
+**并行（未阻塞）**：P5 字体 `bake.ps1` → `intercept --font-inject`（tofu）；见 [notes/hook-strategy.md](notes/hook-strategy.md) §字体。
 
 ---
 
@@ -30,22 +30,27 @@
 - [ ] **主界面 `monitor` 补测**：`TMP_Text.set_text` 在主界面调用与读串
 - [x] **probe 偏移**：`base=0x7530bb4000`，11/11 Hook 可执行（6.5.5）
 - [x] **剧情 `SetWordsInfo` 验证**（前缀模式，见 notes/frida.md §4–5）
-- [ ] **剧情 `STORY_MODE=cn` E2E**：`i18n/story/text.json`（114,859 条）真机活动剧情抽样
+- [ ] **剧情 `STORY_MODE=cn` E2E（AttachSceneData）**：`story_patch.js` + `text.json`；维护后进活动剧情，看 `story_patch_summary` / 简中台词
 - [~] **剧情运行时 ID 探测**：`computeTalkLineIdx` 已修（跳过不再 `++`）；待复测 WORD_SKIP + 顺序播放
 - [ ] **剧情 ctx 补测**：`ScenarioJumper` 书签跳转；无 ctx 的 `SetWordsInfo` fallback
 - [x] **UI 词表 `intercept` 验证**（`[TEST]` 前缀模式，见 notes/frida.md §6）
-- [x] **UI 拦截策略确定**：`WordingManager.GetImpl` `onLeave` + key lookup
+- [x] **UI 拦截策略确定（原型）**：`WordingManager.GetImpl` `onLeave` + key lookup
+- [-] **UI 词表源注入**：有 key，`GetImpl` 查表已 E2E；**不必** `AddMasterWording` patch（见 text-rendering §6）
 
 ---
 
 ## P1 — 笔记与脚本同步
 
-- [ ] 更新 [notes/frida.md](notes/frida.md)：`UI_MODE=cn`、`i18n-tools` 用法；删除旧脚本引用
+- [x] [notes/frida.md](notes/frida.md) §8 剧情 `story_patch.js` / `AttachSceneData` 用法与 E2E 清单
+- [ ] 更新 [notes/frida.md](notes/frida.md)：其余 `UI_MODE=cn`、`i18n-tools`；删除旧脚本引用
 - [x] [notes/hook-strategy.md](notes/hook-strategy.md)：版本维护 / 注入框架 / 字体替换策略
 - [x] [notes/text-rendering.md](notes/text-rendering.md)：国服 diff / 字体策略 / 双语混排
+- [x] [notes/ida-verification.md](notes/ida-verification.md) §剧情 bundle 载入链与 TalkData 布局（Capstone 6.5.5）
 - [ ] 修正 [notes/ida-verification.md](notes/ida-verification.md)：`SetText` 调用方 `X1` 多为空
 - [x] [notes/ida-verification.md](notes/ida-verification.md)：剧情 `SetWordsInfo` 调用链 Capstone 复核（`0x6264F34` 参数布置、`+0x100` 字段、无直接 `BL`）
 - [x] [notes/story-pipeline.md](notes/story-pipeline.md)：结构与 collision 复核结论
+- [x] [notes/text-rendering.md](notes/text-rendering.md) §词表源替换（结论：UI 搁置）+ [hook-strategy.md](notes/hook-strategy.md) §剧情数据源 patch
+- [x] [notes/ida-verification.md](notes/ida-verification.md) §UI 词表加载链（归档，非实施路径）
 - [ ] 关闭 [notes/bg.md](notes/bg.md) 中过时开放问题
 
 ---
@@ -60,7 +65,9 @@
 ## P3 — 翻译数据管线
 
 - [x] **i18n-tools**：`pjsk-i18n fetch/build` → `i18n/ui/wordings.json` + `manifest.json` + `gap-report.json`
-- [x] **Frida 接入**：`run.py` 注入 `UI_WORDINGS`；`intercept.js` key → zh
+- [x] **Frida 接入（原型）**：`run.py` 注入 `UI_WORDINGS`；`intercept.js` `GetImpl` key → zh
+- [~] **剧情数据源 patch**：`story_patch.js` @ `AttachSceneData`（cn patch + dual JP 备份）；待真机 E2E
+- [ ] **Master 缓存解密**（可选）：设备外置补丁 `YUHXZyDBFcwbeeFD`，减轻运行时 Hook
 - [ ] **真机 E2E**（P0，游戏下载后）
 - [x] **Master 明文映射**：`pjsk-i18n build` → `i18n/ui/plain-text.json`（3440 jp→zh，musics/characters/cards/vocals/profiles）
 - [x] **`intercept.js` cn + SetText**：`UI_PLAIN_TEXT` 明文 lookup；`CustomText.SetText(slot)` Hook

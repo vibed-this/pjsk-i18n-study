@@ -184,7 +184,7 @@ uv run python frida/run.py intercept --duration 120 # 可见替换
 ```
 frida/
 ├── run.py / device.py / README.md
-├── lib/offsets.js / lib/runtime.js
+├── lib/offsets.js / lib/runtime.js / lib/story_patch.js
 ├── scripts/monitor.js / intercept.js / probe.js
 └── gadget/
     ├── patch_apk.ps1 / install.ps1 / connect.ps1
@@ -212,10 +212,56 @@ frida/
 
 **字体源**：思源 SC 子集（`pjsk-i18n font-chars` + Unity 烘焙）；或 `sekai-assets-updater` `REGION=CN` 解 `font/` bundle 提取国服 TMP。
 
+### 8. 剧情数据源 patch（2026-06-29，`story_patch.js`）
+
+#### 分析目标
+
+在 **bundle 载入后、播放前** patch `ScenarioSnippetTalk`，替代每句 `SetWordsInfo` + 全局 `jp→zh` 查表（有 collision）。
+
+#### 手段
+
+- Hook：`ScenarioPlayer.AttachSceneData` @ `0x624C100`（IDA 见 [ida-verification.md](./ida-verification.md) §剧情 bundle 载入链）
+- 数据：`i18n/story/text.json`（114,859 条 jp→zh，由 `run.py` 注入为 `STORY_TEXT`）
+- 结构：`enumerateScenarioTalkLines`（`runtime.js`）与 `story-build` 行序一致
+
+#### 过程
+
+**默认配置**（存在 `text.json` 时 `intercept_cfg` 自动启用）：
+
+| 项 | `STORY_MODE=cn` | `STORY_MODE=dual` |
+|----|-----------------|-------------------|
+| `STORY_PATCH_ATTACH` | `true` | `true` |
+| `STORY_SET_WORDS_FALLBACK` | `false`（不 Hook SetWordsInfo 替换） | `true`（仍走 SetWordsInfo 双字幕） |
+| 动作 | patch `talk+0x18` / `+0x20` | 仅 JP 备份到 `STORY_JP_BACKUP` |
+
+**真机命令**（维护结束后）：
+
+```powershell
+uv run python frida/run.py intercept --duration 180
+```
+
+**预期终端输出**：
+
+- `ready` 含 `storyPatch=AttachSceneData`
+- 进活动剧情后：`story_patch_summary`（`scenarioId`、`lines`、`patched`）
+- 抽样：`story_patch` 行（JP/ZH 对照）
+- `stats`：`storyPatchAttach`、`storyPatchHits`
+
+**可选**：`--story-mode dual` 验证 JP 备份 + SetWordsInfo 双字幕并存。
+
+#### 结论
+
+| 项 | 状态 |
+|----|------|
+| 代码原型 | ✅ `story_patch.js` + `offsets.js` 已接入 `intercept` |
+| 真机 E2E | ⏳ **待测**（维护中无法进剧情） |
+| 后续 | 接入 `by-scenario` 按行查表；`OnFinishLoadScenario` 备选 Hook |
+
 ### 待验证项
 
 - [x] 剧情 `TalkWindow.SetWordsInfo` 调用与文本读取
-- [x] `intercept` 剧情替换游戏内可见
+- [x] `intercept` 剧情替换游戏内可见（SetWordsInfo 路径）
+- [ ] **`AttachSceneData` patch E2E**：`story_patch_summary` + 游戏内简中（维护后）
 - [x] `FontAssetManager.SetupBuiltinFontAsset` 调用时机与 fallback 表
 - [x] 主界面 / UI 词表 `intercept` 简中命中（字体 tofu 待 P5）
 - [ ] 主字体替换（思源 SC / 国服 CN）后 `UI_MODE=cn` 无 tofu、字形一致

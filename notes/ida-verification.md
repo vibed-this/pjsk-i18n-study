@@ -232,6 +232,244 @@ ScenarioJumper.SnippetActionTalk(snippet, sequenceId)  @ 0x6244D80  （日志跳
 
 实现策略见 [hook-strategy.md](./hook-strategy.md) §剧情运行时上下文。
 
+---
+
+## UI 词表加载链（归档，非实施路径，2026-06-29）
+
+### 分析目标
+
+曾调研 UI「改 wordings 数据源」所需的 **IDA 函数入口**、参数/数据布局。结论：**不必实施**——UI 有 `wordingKey`，继续 `GetImpl` 查表即可。本节仅保留偏移与结构供参考。
+
+### 手段
+
+- Il2CppDumper `script.json` / `dump.cs`（6.5.5）
+- Capstone 反汇编 `dump/il2cpp/il2cpp.so`（IDA MCP 当次不可用）
+- 对照 `MasterWording` / `CachedMaserDataAll` / `MasterDataManager` 字段偏移
+
+### 过程
+
+**1. 入口修正（Dumper ≠ IDA 落点）**
+
+| 符号 | script.json / dump.cs | **IDA / Capstone 入口** | 偏差 |
+|------|----------------------|---------------------------|------|
+| `WordingManager.AddMasterWording` | `0x602EC68` | **`0x602EC40`** | −0x28（metadata 指向前缀区） |
+| `WordingManager.ForceInit` | `0x602E574` | **`0x602E5A8`** | +0x34 |
+| `MasterDataManager.GetWordings` | `0x606A988` | `0x606A988` | 0 |
+| `MasterDataManager.UpdateMasterData` | `0x604EE24` | `0x604EE24` | 0 |
+| `MasterDataManager.LoadMaster` | `0x604E5B0` | `0x604E5B0` | 0 |
+
+`AddMasterWording` 入口 `0x602EC40` 尾声 **`B #0x6E77810`** 跳入共享实现体；`0x602EC68` 落在 class init 中间，**不可** Hook。
+
+**2. `AddMasterWording` 实现体（`0x6E77810`）**
+
+- 入参：`X0` 保留 / `X1` = `MasterDataManager` 单例（自静态字段 `+0x5b8` 解引用）。
+- 通过内部调用取得 `List<MasterWording>`，逐条读 `wordingKey` / `value`，写入 `WordingManager` 静态 `dictionary`（`Dictionary<string,string>`，`set_Item` 链 `0x5B71CD8` 一带）。
+- **无 BL 直接 xref** 至 `0x602EC40`（经 `B` / 间接调用）；调用频率：**Master 加载完成后一次**（与 `LoadMaster` → `UpdateMasterData` 同阶段）。
+
+**3. `GetWordings`（`0x606A988`）**
+
+- `MasterDataManager` 实例 `+0x40` → `CachedMaserDataAll* cachedMaster`。
+- 返回 `cachedMaster.wordings`（`List<MasterWording>`，dump 字段 **`+0x350`**）。
+- 若将来重做源注入：可在 `AddMasterWording` **`onEnter`** 调 `get_Instance` + `GetWordings`，按 `MasterWording+0x10/+0x18` 预 patch `value`（**当前不采用**）。
+
+**4. `UpdateMasterData`（`0x604EE24`）**
+
+- 签名：`void UpdateMasterData(SuiteMaster masterDataAll)`（`X1` = `SuiteMaster*`）。
+- 将 `SuiteMaster` 各表写入 `cachedMaster`；`wordings` 在 `SuiteMaster+0x380`（`MasterWording[]`），落入 `CachedMaserDataAll+0x350` 列表。
+- 体量大、多表并行；**词表专用**更宜 Hook `AddMasterWording`（单点、已遍历 list）。
+
+**5. `ForceInit`（`0x602E5A8`）**
+
+- `Resources.Load("Wording/wording")` → 解析内置 CSV → **直接**写 `dictionary`（不经 `MasterWording` 列表）。
+- 覆盖 ~196 条（`MSG_STARTAPP_*` 等）；须 **`onLeave`** 枚举 `dictionary` 或保留 `Get` 兜底。
+
+**6. 数据结构（Frida 用）**
+
+| 类型 | 字段 | 偏移 |
+|------|------|------|
+| `MasterWording` | `wordingKey` / `value` | `+0x10` / `+0x18` |
+| `MasterDataManager` | `cachedMaster` | `+0x40` |
+| `CachedMaserDataAll` | `wordings` (`List<>`) | `+0x350` |
+| `List<T>` | `_items` / `_size` | `+0x10` / `+0x18` |
+
+### 结论
+
+| 问题 | 结论 |
+|------|------|
+| 是否实施？ | **否**；UI 量产走 **`GetImpl` `onLeave` + `wordings.json`**（见 [hook-strategy.md](./hook-strategy.md) §UI） |
+| 真机源注入探测 | `sourceAddEnter=0`、`sourceForceInit=0`；简中命中 `sourceGetFallback`（`Get` 兜底） |
+| 若重做源注入的 Hook 点 | `AddMasterWording` @ `0x602EC40` `onEnter`；内置 196 条 `ForceInit` @ `0x602E5A8` `onLeave` |
+| `UpdateMasterData` | 可选；优先度低于 `AddMasterWording` |
+| 代码状态 | `wording_source.js`、`--source-inject` **已撤销**；`offsets.js` 不再保留上述 UI 加载链偏移 |
+| 下一步 | **剧情** bundle 载入链 IDA（非本节） |
+
+---
+
+## 剧情 bundle 载入链与 TalkData 布局（2026-06-29）
+
+### 分析目标
+
+定位 scenario AssetBundle 反序列化后、`ScenarioPlayer` 播放前的 **Hook 候选**；确认运行时 `TalkData`（实为 `ScenarioSnippetTalk`）字段偏移，供 `STORY_MODE=cn` patch 与 JP 备份。
+
+### 手段
+
+- Il2CppDumper `dump.cs` / `script.json`（6.5.5）
+- Capstone 反汇编 `dump/il2cpp/il2cpp.so`（IDA Pro MCP 当次不可用；RVA 与 `script.json` `Address` 一致）
+- 辅助脚本：`tools/analyze_scenario_chain.py`、`tools/analyze_scenario_focus.py`
+- 对照 `sub_6261648`（`AttachSceneData`/`Init` 内联路径）与 `sub_626453C`（`ScenarioSnippetTalk` 访问器）
+
+### 过程
+
+#### 1. 类型与 JSON 字段对应
+
+| JSON / 笔记统称 | 运行时类型（`dump.cs`） | `ScenarioSceneData` 偏移 |
+|-----------------|-------------------------|--------------------------|
+| `ScenarioId` | `string` | `+0x18` |
+| `Snippets` | `ScenarioSnippet[]` | `+0x58` |
+| `TalkData` | **`ScenarioSnippetTalk[]`** | `+0x60` |
+
+> 无独立 `TalkData` 类；离线 JSON 的 `TalkData` 数组即 `ScenarioSnippetTalk` 序列。
+
+**`ScenarioSnippetTalk`（6.5.5）**
+
+| 偏移 | 字段 | patch 目标 |
+|------|------|------------|
+| `+0x10` | `TalkCharacters[]` | — |
+| `+0x18` | `WindowDisplayName` | ✅ 角色名 |
+| `+0x20` | `Body` | ✅ 正文 |
+| `+0x28` | `TalkTention` | — |
+| `+0x40` | `Voices[]` | — |
+
+Capstone 在 `sub_626453C` @ `0x626460C`–`0x6264624` 可见 getter/setter：`ldr/str` 相对 `+0x18` / `+0x20`。
+
+**`ScenarioSnippet`**
+
+| 偏移 | 字段 |
+|------|------|
+| `+0x10` | `Index` |
+| `+0x14` | `Action`（Talk = 1） |
+| `+0x1C` | `ReferenceIndex` → `TalkData[]` 下标 |
+
+**IL2CPP 数组**（`sub_6261648` @ `0x62616B4`–`0x62616D0` 验证）
+
+| 偏移 | 含义 |
+|------|------|
+| `+0x18` | `max_length` |
+| `+0x20` | 首元素（`ScenarioSnippetTalk*` 指针数组，步长 8） |
+
+访问：`talkPtr = [talkArr + 0x20 + refIdx * 8]`。
+
+**`AssetManager.BundleElement`**
+
+| 偏移 | 字段 |
+|------|------|
+| `+0x10` | `BundleName` |
+| `+0x18` | `FileName` |
+| `+0x20` | **`LoadedResource`**（`Object*`，scenario 场景下为 `ScenarioSceneData*`） |
+| `+0x2C` | `LoadStatus` |
+
+**`ScreenLayerScenario`**
+
+| 偏移 | 字段 |
+|------|------|
+| `+0x78` | `scenarioPlayer` |
+| `+0xE8` | `scenarioDatas`（`Dictionary<string, ScenarioSceneData>`） |
+| `+0xF8` | `startScenarioId` |
+
+**`ScenarioPlayer`**（播放期，见 §剧情运行时 ID）
+
+| 偏移 | 字段 |
+|------|------|
+| `+0x1B0` | `scenarioScene` |
+
+#### 2. 加载调用链（6.5.5）
+
+```
+ScreenLayerScenario.LoadScenarioSceneDataAsync          @ 0x63E1908
+  coroutine MoveNext                                    @ 0x63E4868
+    → AssetManager 下载 / 加载 bundle
+    → OnFinishLoadScenario(BundleElement element)       @ 0x63E1F80
+         LoadedResource @ element+0x20 → ScenarioSceneData
+         写入 scenarioDatas @ layer+0xE8（按 scenarioId）
+    → … 播放准备 …
+    → ScenarioPlayer.AttachSceneData(ScenarioSceneData)   @ 0x624C100
+         Init @ 0x624C120（同函数体延续）
+         player.scenarioScene 供播放使用
+
+旁路（工具/预载，非主 UI 链必走）：
+ScenarioUtility.GetScenarioData(scenarioId, bundleName) @ 0x4C23834
+  async MoveNext                                        @ 0x4C2B20C
+    → 回调 <>c__DisplayClass3_0.<GetScenarioData>b__0   @ 0x4C26548
+         入参 AssetManager.BundleElement*（LoadStatus==Success 时处理）
+```
+
+播放期读 Talk 字段（已验证，§剧情运行时 ID 补充）：
+
+```
+SnippetActionTalk.MoveNext @ 0x62643F0
+  → sub_626453C：按 snippet.ReferenceIndex 取 TalkData
+  → sub_6263F28：读 talk+0x18 / +0x28，处理后 → SetWordsInfo
+```
+
+`sub_6261648` 内联逻辑（`AttachSceneData` 调用 @ `0x624C264`）：
+
+```asm
+ldr x8, [player, #0x1b0]     ; scenarioScene
+ldr x8, [x8, #0x60]          ; TalkData[]
+ldrsw x9, [snippet, #0x1c]   ; ReferenceIndex
+ldr w10, [x8, #0x18]         ; max_length
+add x8, x8, x9, lsl #3
+ldr x1, [x8, #0x20]          ; ScenarioSnippetTalk*
+```
+
+#### 3. Hook 候选（IDA 入口 RVA）
+
+| 优先级 | 符号 | RVA | 时机 | Frida `onEnter` 参数 |
+|--------|------|-----|------|----------------------|
+| **P0** | `ScenarioPlayer.AttachSceneData` | `0x624C100` | 场景挂接到 player、**播放前** | `X0`=player，`X1`=`ScenarioSceneData*` |
+| **P1** | `ScreenLayerScenario.OnFinishLoadScenario` | `0x63E1F80` | bundle 载入完成、写入缓存 | `X0`=layer，`X1`=`BundleElement*` → `+0x20` 为 scene |
+| P2 | `ScenarioUtility.<>c__DisplayClass3_0.<GetScenarioData>b__0` | `0x4C26548` | 异步 GetScenarioData 回调 | `X1`=`BundleElement*` |
+| 过渡 | `ScenarioPlayer.SnippetActionTalk` | `0x624FC28` | 每句 Talk（已有 ctx 方案） | 见 §剧情运行时 ID |
+
+**推荐量产**：**P0 `AttachSceneData` `onEnter`** — 直接拿到 `ScenarioSceneData*`，单次 patch 整话；不依赖 `BundleElement` 解析。
+
+**patch 伪代码**（与 `story-build` 行序一致）：
+
+```javascript
+const scene = args[1];
+const scenarioId = readIl2CppString(readPtr(scene, SCENARIO_SCENE_ID));
+const snippets = readPtr(scene, SCENARIO_SCENE_SNIPPETS);
+const talkArr = readPtr(scene, 0x60);
+let talkLineIdx = 0;
+for (const snip of sortedSnippets(snippets)) {
+  if (readS32(snip, SCENARIO_SNIPPET_ACTION) !== SCENARIO_ACTION_TALK) continue;
+  const ref = readS32(snip, SCENARIO_SNIPPET_REF_INDEX);
+  const talk = readPtr(talkArr, IL2CPP_ARRAY_VECTOR + ref * 8);
+  const zh = lookup(`${scenarioId}:${talkLineIdx}`); // 或 by-scenario 文件
+  if (STORY_MODE === 'cn' && zh) {
+    writeIl2CppStringField(talk, 0x18, zh.name);
+    writeIl2CppStringField(talk, 0x20, zh.body);
+  } else if (STORY_MODE === 'dual') {
+    backupJp(scenarioId, talkLineIdx, talk); // 深拷贝 +0x18/+0x20
+  }
+  talkLineIdx++;
+}
+```
+
+### 结论
+
+| 问题 | 结论 |
+|------|------|
+| `TalkData` 运行时类型？ | **`ScenarioSnippetTalk`**；`ScenarioSceneData+0x60` |
+| 正文字段偏移？ | **`+0x20` `Body`**；显示名 **`+0x18`**（Capstone + dump.cs 一致） |
+| 首选 Hook？ | **`ScenarioPlayer.AttachSceneData` `0x624C100` `onEnter`** |
+| 备选 Hook？ | `OnFinishLoadScenario` `0x63E1F80`（更早，改 `scenarioDatas` 缓存） |
+| 行序对齐？ | 遍历 `Snippets` 中 `Action==Talk`（按 `Index` 排序），**非**裸 `TalkData[]` 下标 |
+| Frida 原型 | ✅ `frida/lib/story_patch.js` @ `0x624C100`（见 [frida.md](./frida.md) §8） |
+| 下一步 | 真机 E2E（维护后）；备选 `OnFinishLoadScenario` `0x63E1F80` |
+
+实现策略见 [hook-strategy.md](./hook-strategy.md) §剧情数据源 patch、[story-pipeline.md](./story-pipeline.md) §运行时注入。
+
 ## 相关笔记
 
 - Hook 方案：[hook-strategy.md](./hook-strategy.md)

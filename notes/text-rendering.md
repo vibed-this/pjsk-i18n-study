@@ -285,12 +285,82 @@ flowchart TD
 
 **实践建议（暂缓）**：Mod 翻译管线可先用内置 196 条覆盖启动/错误文案；全量 UI 仍须 Master 解密或社区 diff。
 
-#### 6. 与剧情文本的区分
+#### 6. 词表源替换（搁置，2026-06-29）
+
+##### 分析目标
+
+曾调研将 UI 汉化从 **`GetImpl` `onLeave` 查表** 转为 **改 `wordings` 数据源**（`AddMasterWording` / `dictionary` 落地时写 zh）。真机验证后**搁置**：UI 有稳定 `wordingKey`，`GetImpl` + `i18n/ui/wordings.json` 已 E2E，**不必**走数据源 patch。
+
+**当前焦点**为剧情 **bundle 载入层 patch**（无 key，见 [hook-strategy.md](./hook-strategy.md) §剧情数据源 patch、[story-pipeline.md](./story-pipeline.md) §运行时注入）。
+
+##### 手段
+
+| 组件 | 用途 |
+|------|------|
+| 已有加载链（§2） | `suiteMaster` → `CachedMaserDataAll.wordings` → `AddMasterWording` → `dictionary` |
+| `i18n/ui/wordings.json` | `pjsk-i18n build` 产出 **4838** `wordingKey→zh`（国服 diff + override） |
+| Frida 原型 | 当前 `intercept.js` 在 `GetImpl` `onLeave` 查 `UI_WORDINGS`（已 E2E） |
+| 内置引导词表 | `ForceInit` → `Resources.Load("Wording/wording")` ~196 条（§5） |
+| 设备 Master 缓存 | `MasterDataManager.temp` 加密文件；路径已知，解密待做 |
+
+##### 过程
+
+**当前原型（展示层）**
+
+```
+Master 日文 value → dictionary[key]=jp
+  → GetImpl onLeave → lookup UI_WORDINGS[key] → 替换为 zh  ← 现在
+```
+
+**目标（数据源）**
+
+```
+Master 日文 value（或缓存/CDN 载荷）
+  → [注入点] dictionary[key]=zh   （或 AddMasterWording 时改写 value）
+  → Get / GetFormat 直接返回 zh，无需 onLeave 替换
+```
+
+**候选注入点**（待 IDA / Frida 验证，优先级由高到低）
+
+| 优先级 | 位置 | 动作 | 优点 | 风险 / 待验证 |
+|--------|------|------|------|----------------|
+| P0 | `WordingManager.AddMasterWording` @ **`0x602EC40`**（IDA 入口；Dumper `0x602EC68`） | `onEnter` patch `GetWordings()` 列表内 `MasterWording.value` | 单点、覆盖 Master 全表落地 | 真机 E2E；`ForceInit` 另点 |
+| P0 | `UpdateMasterData` / `LoadMaster` 返回后 | 批量 patch `CachedMaserDataAll.wordings` 列表 | 早于 dictionary，可一次处理 | 需定位列表容器与元素布局 |
+| P1 | `suiteMaster` CDN 分片下载完成 | 替换 MessagePack 载荷或解析后 `MasterWording[]` | 与官方管线一致 | API 路径、鉴权、分片合并 |
+| P1 | 设备 Master 缓存解密后写回 | 外部工具 / Mod 安装器改 `YUHXZyDBFcwbeeFD` | 构建机外置、Hook 最轻 | `FastAESCrypt` 密钥；版本/hash |
+| P2 | `ForceInit` @ **`0x602E5A8`**（IDA；Dumper `0x602E574`） | `onLeave` 枚举 `dictionary` 或 `Get` 兜底 | 覆盖登录前 ~196 条 | 真机 `sourceForceInit=0`；`Get` 兜底即可 |
+
+**与构建产物关系**
+
+- 汉化表已存在：`i18n/ui/wordings.json`（与 Frida 注入的 `UI_WORDINGS` 同构）。
+- 日服独有 key（约 **306**，见 `gap-report.json`）：注入时 **无 CN 条目则保留 JP `value`**，与当前 `lookupUiZh` 返回 null 行为一致。
+- **不替代** `plain-text.json`：曲名/角色名等 **Master 明文直写** `SetText` 链仍须单独处理（见 [hook-strategy.md](./hook-strategy.md) §UI 旁路）。
+
+**设备 vs 构建机**
+
+| 执行位置 | 适用 |
+|----------|------|
+| 构建机 / CI | 生成 `wordings.json`、可选预生成 MessagePack 补丁包 |
+| 用户设备（外部） | 解密后改 Master 缓存、安装补丁目录 |
+| 用户设备（Hook，**已定**） | `GetImpl` `onLeave` 按 `wordingKey` 查 `wordings.json` |
+
+##### 结论
+
+| 问题 | 结论 |
+|------|------|
+| UI 是否要做数据源 patch？ | **不必**；有 `wordingKey`，`GetImpl` `onLeave` + `wordings.json` 已量产 |
+| 为何搁置？ | 工程收益小；`AddMasterWording` 冷启动未命中（`sourceAddEnter=0`），简中全靠 `Get` 兜底；Master 缓存/时机复杂 |
+| 构建产物 | `i18n/ui/wordings.json` 继续供 **`Get` 查表**；非 `dictionary` 预写 |
+| 字体 | **独立**；与词表注入无关，仍须 [hook-strategy.md](./hook-strategy.md) §字体 |
+| 归档情报 | IDA 加载链偏移见 [ida-verification.md](./ida-verification.md) §UI 词表加载链 |
+| 下一步 | **剧情** bundle 载入 patch / JP 备份（非 UI 路线） |
+
+#### 7. 与剧情文本的区分
 
 | 类型 | 数据形态 | Hook 点 |
 |------|----------|---------|
-| **UI 词表** | key → `MasterWording.value` | `SetWordingText` / `WordingManager.Get` / `TMP_Text.set_text` |
-| **剧情对话** | 明文（角色名 + 正文） | `TalkWindow.SetWordsInfo`；数据来自 scenario JSON，**不走词表 key** |
+| **UI 词表** | key → `MasterWording.value` | **`GetImpl` / `GetFormat` 查表**（已定）；`SetText` 明文旁路 |
+| **剧情对话** | 明文（角色名 + 正文） | **bundle 载入层 patch `TalkData`**（当前焦点）；`SetWordsInfo` 过渡/兜底 |
 
 ### 结论
 
