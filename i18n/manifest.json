@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-28T16:10:11+00:00",
+  "built_at": "2026-06-29T08:01:00+00:00",
   "locale": "zh-Hans",
   "target_client": "jp",
   "sources": {
@@ -10,37 +10,11 @@
   },
   "outputs": {
     "ui_wordings": "i18n/ui/wordings.json",
-    "ui_wordings_sha256": "a0b552101eaaa5077662090dcc4f3d3ee3c30bc8065b3cffabf49d1a55be4ec3",
+    "ui_wordings_sha256": "de7a17f354b2167452505f096e5a1f06e68d3c8a9b7097da28d8c712411d82c8",
     "ui_plain_text": "i18n/ui/plain-text.json",
     "ui_plain_text_sha256": "bfe1ace29b0f4248262f572c1c6b5351a590a3a763048ce65dc0e717bfc31fc4",
     "entry_count": 4838,
-    "plain_text_count": 3440,
-    "story_text": "i18n/story/text.json",
-    "story_text_sha256": "2261bf82c1c1587275f974d82cd304e2f388a34027dbc9da1b22749ad27e2e8d",
-    "story_text_count": 114859
+    "plain_text_count": 3440
   },
-  "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText); story jp→zh (SetWordsInfo)",
-  "story": {
-    "demo": false,
-    "built_at": "2026-06-29T01:13:59+00:00",
-    "stats": {
-      "scenarios_processed": 1498,
-      "scenarios_aligned": 1495,
-      "body_pairs": 113529,
-      "name_pairs": 1330,
-      "text_entries": 114859,
-      "collision_count": 5364
-    },
-    "inventory": {
-      "jp_card_episodes": 2670,
-      "cn_card_episodes": 2384,
-      "jp_event_episodes": 1688,
-      "cn_event_episodes": 1498,
-      "jp_total": 4358,
-      "cn_total": 3882,
-      "common": 3882,
-      "jp_only": 476
-    },
-    "gap_report": "i18n/reports/story-gap-report.json"
-  }
+  "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText)"
 }

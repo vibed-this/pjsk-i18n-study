@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from .text_normalize import normalize_literal_escapes
+
 
 def load_ui_overrides(path: Path) -> dict[str, str]:
     if not path.exists():
@@ -21,12 +23,12 @@ def load_ui_overrides(path: Path) -> dict[str, str]:
             continue
         k = str(key)
         if isinstance(value, str):
-            out[k] = value
+            out[k] = normalize_literal_escapes(value)
         elif isinstance(value, dict):
             zh = value.get("zh")
             if zh is None:
                 raise ValueError(f"override {k} object missing 'zh' in {path}")
-            out[k] = str(zh)
+            out[k] = normalize_literal_escapes(str(zh))
         else:
             raise ValueError(f"override {k} must be string or {{zh: ...}} in {path}")
     return out

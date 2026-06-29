@@ -36,13 +36,25 @@ STORY_PATCH_LIBS = ("story_patch.js",)
 MODES = ("intercept", "monitor", "probe", "font")
 
 
+def _normalize_literal_escapes(text: str) -> str:
+    """CN wordings may contain literal \\n instead of newline (see text_normalize.py)."""
+    if "\\" not in text:
+        return text
+    return (
+        text.replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+    )
+
+
 def load_json_string_map(path: Path) -> dict[str, str] | None:
     if not path.is_file():
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"expected object in {path}")
-    return {str(k): str(v) for k, v in data.items()}
+    return {str(k): _normalize_literal_escapes(str(v)) for k, v in data.items()}
 
 
 def load_ui_wordings() -> dict[str, str] | None:

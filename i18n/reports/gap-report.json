@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-28T16:10:11+00:00",
+  "built_at": "2026-06-29T08:01:00+00:00",
   "locale": "zh-Hans",
   "counts": {
     "cn_source": 4838,
@@ -436,7 +436,7 @@
       "cards: '仲間の存在' → '拥有伙伴的意义' vs '伙伴的意义'",
       "cards: '時には穏やかな時間を' → '偶尔也要享受平静的时间' vs '偶尔享受悠闲的时光'"
     ],
-    "built_at": "2026-06-28T16:10:11+00:00",
+    "built_at": "2026-06-29T08:01:00+00:00",
     "output": "E:\\GithubRepos\\pjsk-i18n-mod\\i18n\\ui\\plain-text.json",
     "entry_count": 3440
   }

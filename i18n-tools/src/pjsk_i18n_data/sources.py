@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .text_normalize import normalize_literal_escapes
+
 
 @dataclass(frozen=True)
 class SourcesLock:
@@ -52,7 +54,8 @@ def wordings_list_to_map(rows: list[dict[str, Any]]) -> dict[str, str]:
             continue
         if key in out:
             dupes.append(key)
-        out[str(key)] = "" if value is None else str(value)
+        raw = "" if value is None else str(value)
+        out[str(key)] = normalize_literal_escapes(raw)
     if dupes:
         raise ValueError(f"duplicate wordingKey in source ({len(dupes)}): {dupes[:5]}")
     return out
