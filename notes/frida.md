@@ -183,9 +183,11 @@ frida/
 | `baseB`（DB）| `fallbackSize`：0 → **2** |
 | `loadedA/B` | leave 后填入新加载的 EB/DB `TMP_FontAsset` |
 
-**注入挂点**：`SetupBuiltinFontAsset` **onLeave**，向 `baseA`（`FontAssetManager+0x20`）与 `baseB`（`+0x38`）的 `[font+0x138]` List **追加**国服 CJK `TMP_FontAsset`（勿在 `ClearFallback` 之前注入）。
+**策略（2026-06-29 定案）**：初步汉化采用**替换主字体**，非 fallback 追加。`SetupBuiltinFontAsset` **onLeave** 将 `+0x20`（EB）、`+0x38`（DB）换为思源 SC（或国服 CN）`TMP_FontAsset`；原 EB/DB 挂入新字体 `[font+0x138]` fallback，兜底未翻译日文。理由：主字体有字形时 TMP 不走 fallback，日文字形会与简中混搭。见 [text-rendering.md](./text-rendering.md) §初步汉化字体策略。
 
-**国服对齐**：CN 客户端应存在同名 DB/EB 资产（CJK atlas）；用 `sekai-assets-updater` `REGION=CN` 解 `font/` bundle 提取。
+**实现**：`font_inject.js` `FONT_MODE=replace` 在 onLeave **替换** `+0x20`/`+0x38` 为 SC，原 EB/DB 写入 SC fallback；`dual`/`load` 仅加载 SC 不改主字体。
+
+**字体源**：思源 SC 子集（`pjsk-i18n font-chars` + Unity 烘焙）；或 `sekai-assets-updater` `REGION=CN` 解 `font/` bundle 提取国服 TMP。
 
 ### 待验证项
 
@@ -193,7 +195,7 @@ frida/
 - [x] `intercept` 剧情替换游戏内可见
 - [x] `FontAssetManager.SetupBuiltinFontAsset` 调用时机与 fallback 表
 - [x] 主界面 / UI 词表 `intercept` 简中命中（字体 tofu 待 P5）
-- [ ] 国服 CJK fallback 注入后无 tofu
+- [ ] 主字体替换（思源 SC / 国服 CN）后 `UI_MODE=cn` 无 tofu、字形一致
 - [ ] 剧情早期 `TMP_Text.set_text` 绕过规律（`SetWordsInfo` 直达显示）
 - [ ] 主界面 `TMP_Text.set_text` 正文读取
 - [ ] 游戏 `versionName` 与本地 `apk/` 一致性（真机 6.5.5）

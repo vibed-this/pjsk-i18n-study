@@ -103,6 +103,8 @@ ARM64 参数：
 
 行为：`X0` = manager，`X1` = `TMP_FontAsset`；读取 `[font+0x138]` 的 List，将 `size` 置 0（`SetupBuiltinFontAsset` 在写入新 fallback 前调用）。
 
+**初步汉化替换点（2026-06-29）**：在 `SetupBuiltinFontAsset` **onLeave** 改写 `FontAssetManager` 的 `+0x20`（EB）、`+0x38`（DB）为主简中 `TMP_FontAsset` 指针；原 EB/DB 写入新字体的 `[font+0x138]` fallback List。勿仅在 fallback 链末尾追加（主字体有字形时不走 fallback）。策略见 [hook-strategy.md](./hook-strategy.md)、[text-rendering.md](./text-rendering.md)。
+
 ### `TMPro_TMP_Text_set_text` — TMP 底层兜底
 
 | 项 | 值 |

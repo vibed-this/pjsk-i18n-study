@@ -111,12 +111,63 @@ uv run python frida/run.py intercept --story-mode dual --dual-style plain
 uv run python frida/run.py intercept --story-mode dual --dual-style rich
 ```
 
+### 6. 双语混排与字体（2026-06-29）
+
+与 [text-rendering.md](./text-rendering.md) §初步汉化字体策略衔接：UI/单行简中采用**全局主字体替换**；双字幕因 JP+CN **同屏混排**，策略不同。
+
+#### 问题
+
+双字幕字符串形如：
+
+```
+[[你好。这里居然…]]     ← 简中
+こんにちは。            ← 日文
+```
+
+若写入**同一** `wordsLabel` 且只配置一条 TMP 主字体 + fallback 链：
+
+| 主字体 | 简中行 | 日文行 |
+|--------|--------|--------|
+| 思源 SC | ✅ 简体字形 | ⚠️ 假名可显示；与简中**共用码位的汉字**显示中国形（非日文形） |
+| EB/DB | ⚠️ 简体专用字靠 fallback；共用汉字为日本形 | ✅ 日文形 |
+
+**结论**：单 label、单主字体无法让两行同时满足区域字形；fallback 只解决**缺字**，不解决**同码位不同字形**。
+
+#### 推荐方案（按优先级）
+
+| 优先级 | 方案 | 字体处理 |
+|--------|------|----------|
+| **1** | **物理双 label**（见 §后续方向 #2） | 日文 label → `font` = EB/DB（游戏默认）；译文 label → `font` = 思源 SC `TMP_FontAsset`。各走各的 atlas，无混排冲突。`wordsOutlineLabel` 须与对应正文 label **同步**字体。 |
+| **2** | **两阶段 + `<font>` 标签** | 阶段 1：label 仅 JP，EB/DB 打字。阶段 2：打字完成后追加/更新译文，用 `<font="SourceHanSansSC-Regular SDF">译文</font>` 包简中段（需两资产已 `LoadAsset`）。 |
+| **3** | **单 label 妥协** | SC 主 + EB/DB fallback：接受日文行汉字「中国形」；仅作过渡，不作终态。 |
+
+#### 与全局字体替换的关系
+
+| `STORY_MODE` | 字体 Mod 行为 |
+|--------------|----------------|
+| `cn` / UI `UI_MODE=cn` | `SetupBuiltinFontAsset` onLeave **替换** EB/DB 为 SC 主字体 |
+| `dual` | **不**做全局替换；保留 EB/DB 给日文 label；另载 SC bundle，仅绑译文 label 或 rich 段 |
+| `prefix` / 默认 | 可不注入字体，或仅 EB/DB |
+
+实现要点：
+
+- 运行时同时保留 **EB/DB + 思源 SC** 三份（或两份：SC + EB/DB）`TMP_FontAsset` 引用。
+- `font_inject.js` 宜支持 `FONT_MODE=replace|dual`：`dual` 只加载 SC 资产到缓存，不改 `FontAssetManager+0x20/0x38`。
+- 第二 label 若运行时创建，材质/Shader 须与 `CustomTextMesh` 一致（复用 EB 的 material 模板或 SC 烘焙材质）。
+
+#### 与打字机、富文本的叠加
+
+- **plain 双行单 label**：字体混排问题如上；打字机两行分别推进（§方案 A）— 字体与节奏双重问题 → 仍推荐双 label。
+- **rich 边打边显**：标签裸露（§方案 B）— 与 `<font>` 无关，打字完成后再用 rich 可同时解决**节奏 + 分字体**。
+
 ### 开放问题
 
 - [ ] 打字机完成事件 / `maxVisibleCharacters` 稳定判定
 - [ ] 是否存在可复用第二 label 或需运行时挂节点
 - [ ] 双行布局与对话框高度、立绘遮挡
-- [ ] 与 CJK 字体注入的叠加（译文行中文可能 tofu）
+- [x] 双语混排字体：单主字体不可行 → **双 label 分字体** 或 **打字后 `<font>` 分段**（见 §6）
+- [ ] 译文 label 复用 `wordsOutlineLabel` 是否安全（描边复制层 vs 独立节点）
+- [x] `FONT_MODE=dual`：`font_inject.js` 仅加载 SC，不替换 EB/DB
 
 ## 相关笔记
 

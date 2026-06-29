@@ -44,6 +44,63 @@
 
 ---
 
+## 初步汉化字体策略（2026-06-29）
+
+### 分析目标
+
+确定初步汉化阶段如何避免简中 tofu，同时保证简体字形一致（非日文汉字形混搭）。
+
+### 手段
+
+- 真机 `font` 探测：`SetupBuiltinFontAsset` / `ClearFallbackFontAsset` 调用顺序与 `FontAssetManager` 字段（见 [frida.md](./frida.md) §7、[ida-verification.md](./ida-verification.md)）
+- TMP 渲染语义：主字体 atlas 有字形则**不**查 fallback
+- 思源黑体区域子集对照：SC vs JP 字形差异
+
+### 过程
+
+1. 日服内置主字体为 **`EB`** / **`DB`**（`FontAssetManager+0x20` / `+0x38`），glyph 按日文设计。
+2. 初版 Frida 原型向 `[font+0x138]` fallback List **追加**思源 SC — 仅当主字体**缺字**时生效。
+3. 大量中日共用码位在日文字体中**已有字形**（日文写法）→ 简中翻译仍显示日文形；仅简体专用字（设、说、网等）才落到 fallback。
+4. **思源黑体 SC**（`SourceHanSansSC`）：主力为**简体汉字**（中国字形），通常含平假名/片假名，**不含**日文汉字形；未翻译日文可由 EB/DB fallback 显示。
+5. 定案：初步汉化采用**替换主字体**，而非 fallback 补字。
+
+### 结论
+
+| 项 | 结论 |
+|----|------|
+| 初步汉化策略 | **替换**：`SetupBuiltinFontAsset` onLeave 将 EB/DB 换为 SC `TMP_FontAsset` |
+| 原 EB/DB 去向 | 降级为新字体的 **fallback**，兜底 gap 日文、假名、日字特化形 |
+| 字体资产来源 | 优先 **思源 SC 子集**（charset 烘焙）；备选国服 CN 同名 TMP bundle |
+| 弃用方案 | 日文字体主 + fallback 追加 — 只解决 tofu，不解决字形区域错误 |
+| 不适用路径 | legacy `CustomText`（Unity `Text`）不走 TMP fallback，需单独处理 |
+| 实现状态 | `frida/lib/font_inject.js`：`FONT_MODE=replace` 替换主字体；`dual` 仅预加载 SC |
+
+Hook 细节见 [hook-strategy.md](./hook-strategy.md) §字体替换挂点。
+
+### 双语混排（剧情双字幕）时的字体策略
+
+与「全 UI / 单行剧情简中」不同：双字幕**同一屏同时出现日文与中文**，不能把全局主字体简单替换成思源 SC。
+
+| 场景 | 字体策略 |
+|------|----------|
+| UI 简中 / 剧情 `STORY_MODE=cn` | 全局替换 EB/DB → SC 主字体；EB/DB 作 fallback |
+| 剧情 `STORY_MODE=dual` | **按行 / 按 label 分字体**；禁止依赖单主字体 + fallback 混排 |
+
+**根因**：TMP 逐字查字形——主字体 atlas **有该码位即用主字体形**，不区分「这句是日文还是中文」。单 label 内混排时：
+
+- SC 主 + EB/DB fallback：简中行正确；日文行里的**共用汉字**仍显示**中国形** ❌
+- EB/DB 主 + SC fallback：日文行正确；简中行里的共用汉字显示**日本形** ❌
+
+**推荐（与 [dual-subtitle.md](./dual-subtitle.md) 双 label 方向一致）**：
+
+1. **物理双 label**：`wordsLabel`（或打字机 label）只显示日文 → 保持 **EB/DB**；译文 label 显示简中 → 绑定 **思源 SC**（`TMP_Text.font` 或运行时挂节点）。
+2. **两阶段 + 富文本 `<font>`**（打字完成后再写译文）：整串默认 EB/DB，译文段包 `<font="SourceHanSansSC-Regular SDF">…</font>`；两资产须已加载。打字过程中仍不可用 rich（标签会被逐字打出）。
+3. **妥协（不推荐）**：单 label 混排 + SC 主 / EB fallback — 仅假名与缺字回落日文，共用汉字日文行仍不对。
+
+运行时须**同时驻留** SC 与 EB/DB 两份 `TMP_FontAsset`（全局替换策略在 dual 模式下应**关闭**或仅作用于 UI label）。
+
+---
+
 ## 词表 key 与日文数据来源（2026-06-28）
 
 ### 分析目标

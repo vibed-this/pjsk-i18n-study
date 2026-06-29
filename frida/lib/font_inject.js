@@ -1,5 +1,10 @@
-// Source Han TMP_FontAsset fallback injection (after il2cpp_unity.js)
+// Source Han TMP_FontAsset — primary replacement (after il2cpp_unity.js)
 'use strict';
+
+const FONT_MANAGER_PRIMARY = {
+    baseA: 0x20,
+    baseB: 0x38,
+};
 
 let _fontInjectCfgCache = null;
 
@@ -9,17 +14,31 @@ function fontInjectCfg() {
     _fontInjectCfgCache = Object.assign({
         FONT_BUNDLE_PATH: '/sdcard/Android/data/com.sega.pjsekai/files/i18n/font/source-han-fallback.bundle',
         FONT_ASSET_NAME: 'SourceHanSansSC-Regular SDF',
+        FONT_MODE: 'replace',  // 'replace' | 'dual' | 'load'
         INJECT_BASES: ['baseA', 'baseB'],
     }, override);
     return _fontInjectCfgCache;
 }
 
-let _cachedFallbackFont = null;
+let _cachedScFont = null;
 let _fontInjectDone = false;
+
+function writeMgrPtr(mgr, offset, ptr) {
+    if (!mgr || mgr.isNull() || !ptr || ptr.isNull()) return false;
+    try {
+        mgr.add(offset).writePointer(ptr);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
 
 function appendToFallbackList(baseFont, fallbackFont) {
     if (!baseFont || baseFont.isNull() || !fallbackFont || fallbackFont.isNull()) {
         return { ok: false, reason: 'null_font' };
+    }
+    if (baseFont.equals(fallbackFont)) {
+        return { ok: false, reason: 'same_font' };
     }
     const list = readPtr(baseFont, TMP_FONT_FALLBACK_LIST);
     if (!list) return { ok: false, reason: 'no_fallback_list' };
@@ -27,6 +46,15 @@ function appendToFallbackList(baseFont, fallbackFont) {
     const size = list.add(IL2CPP_LIST_SIZE).readS32();
     const items = readPtr(list, IL2CPP_LIST_ITEMS);
     if (!items) return { ok: false, reason: 'no_list_items' };
+
+    for (let i = 0; i < size; i++) {
+        try {
+            const existing = items.add(0x20 + i * Process.pointerSize).readPointer();
+            if (existing && !existing.isNull() && existing.equals(fallbackFont)) {
+                return { ok: true, reason: 'already_present', sizeBefore: size, sizeAfter: size };
+            }
+        } catch (_) {}
+    }
 
     const capacity = items.add(0x18).readS32();
     if (size < 0 || size >= capacity) {
@@ -44,13 +72,92 @@ function appendToFallbackList(baseFont, fallbackFont) {
 }
 
 function loadSourceHanTmpFont() {
-    if (_cachedFallbackFont) return _cachedFallbackFont;
+    if (_cachedScFont) return _cachedScFont;
     bindIl2CppUnity();
     const cfg = fontInjectCfg();
     const bundle = unityLoadAssetBundleFromFile(cfg.FONT_BUNDLE_PATH);
     const asset = unityLoadTmpFontAsset(bundle, cfg.FONT_ASSET_NAME);
-    _cachedFallbackFont = asset;
+    _cachedScFont = asset;
     return asset;
+}
+
+function getCachedSourceHanFont() {
+    return _cachedScFont;
+}
+
+function replacePrimaryFonts(mgr, scFont) {
+    const cfg = fontInjectCfg();
+    const wanted = cfg.INJECT_BASES || ['baseA', 'baseB'];
+    const results = {};
+    const originals = [];
+    const seen = {};
+    let slotOk = true;
+
+    for (let i = 0; i < wanted.length; i++) {
+        const label = wanted[i];
+        const off = FONT_MANAGER_PRIMARY[label];
+        if (off === undefined) {
+            results[label] = { ok: false, reason: 'unknown_slot' };
+            slotOk = false;
+            continue;
+        }
+        const orig = readPtr(mgr, off);
+        if (!orig) {
+            results[label] = { ok: false, reason: 'missing_original' };
+            slotOk = false;
+            continue;
+        }
+        const key = orig.toString();
+        results[label] = {
+            ok: true,
+            originalName: readUnityObjectName(orig),
+            originalPtr: key,
+        };
+        if (!seen[key]) {
+            seen[key] = true;
+            originals.push(orig);
+        }
+    }
+
+    if (!slotOk) {
+        return { ok: false, mode: 'replace', reason: 'missing_slots', results: results };
+    }
+
+    const fallbackDemote = [];
+    let fallbackWarn = false;
+    for (let j = 0; j < originals.length; j++) {
+        const orig = originals[j];
+        const row = appendToFallbackList(scFont, orig);
+        row.name = readUnityObjectName(orig);
+        fallbackDemote.push(row);
+        if (!row.ok && row.reason !== 'same_font' && row.reason !== 'already_present') {
+            fallbackWarn = true;
+        }
+    }
+
+    let replaceOk = true;
+    for (let i = 0; i < wanted.length; i++) {
+        const label = wanted[i];
+        const off = FONT_MANAGER_PRIMARY[label];
+        if (!writeMgrPtr(mgr, off, scFont)) {
+            results[label].ok = false;
+            results[label].reason = 'write_failed';
+            replaceOk = false;
+            continue;
+        }
+        results[label].replaced = true;
+        results[label].primaryName = readUnityObjectName(scFont);
+    }
+
+    return {
+        ok: replaceOk,
+        mode: 'replace',
+        scFont: describeTmpFontAsset(scFont),
+        results: results,
+        fallbackDemote: fallbackDemote,
+        fallbackWarn: fallbackWarn,
+        after: describeFontManager(mgr),
+    };
 }
 
 function injectSourceHanIntoManager(mgr) {
@@ -61,40 +168,30 @@ function injectSourceHanIntoManager(mgr) {
         return { ok: false, reason: 'null_manager' };
     }
 
-    let fallback;
+    const cfg = fontInjectCfg();
+    const mode = cfg.FONT_MODE || 'replace';
+
+    let scFont;
     try {
-        fallback = loadSourceHanTmpFont();
+        scFont = loadSourceHanTmpFont();
     } catch (e) {
-        return { ok: false, reason: 'load_failed', error: String(e) };
+        return { ok: false, reason: 'load_failed', error: String(e), mode: mode };
     }
 
-    const targets = {
-        baseA: readPtr(mgr, 0x20),
-        baseB: readPtr(mgr, 0x38),
-    };
-    const results = {};
-    let ok = true;
-    const wanted = fontInjectCfg().INJECT_BASES || ['baseA', 'baseB'];
-    for (let i = 0; i < wanted.length; i++) {
-        const label = wanted[i];
-        const base = targets[label];
-        if (!base) {
-            results[label] = { ok: false, reason: 'missing_base' };
-            ok = false;
-            continue;
-        }
-        results[label] = appendToFallbackList(base, fallback);
-        results[label].baseName = readUnityObjectName(base);
-        if (!results[label].ok) ok = false;
+    if (mode === 'dual' || mode === 'load') {
+        _fontInjectDone = true;
+        return {
+            ok: true,
+            mode: mode,
+            scFont: describeTmpFontAsset(scFont),
+            skippedReplace: true,
+            after: describeFontManager(mgr),
+        };
     }
 
-    if (ok) _fontInjectDone = true;
-    return {
-        ok: ok,
-        fallback: describeTmpFontAsset(fallback),
-        results: results,
-        after: describeFontManager(mgr),
-    };
+    const out = replacePrimaryFonts(mgr, scFont);
+    if (out.ok) _fontInjectDone = true;
+    return out;
 }
 
 function installFontInjectHook(stats) {

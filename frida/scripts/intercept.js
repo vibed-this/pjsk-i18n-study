@@ -351,6 +351,7 @@ function install() {
         storyMode: CFG.STORY_MODE,
         uiMode: CFG.UI_MODE,
         fontInject: CFG.FONT_INJECT,
+        fontMode: CFG.FONT_MODE || 'replace',
         dualStyle: CFG.DUAL_STYLE,
         prefix: CFG.PREFIX,
         intercept: CFG.INTERCEPT,

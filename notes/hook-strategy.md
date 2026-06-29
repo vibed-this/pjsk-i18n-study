@@ -32,7 +32,7 @@ UI 格式   → WordingManager.GetFormat              @ 0x602F054   带占位符
 UI key    → CustomTextMesh.SetWordingText         @ 0x4F2B408   onEnter 读 key
 UI 显示   → CustomTextMesh.SetText                @ 0x4F27530   替换 X1（显示前兜底）
 UI slot   → CustomTextMesh.SetText（ICustomText） @ 0x4F2B590   UpdateWordingText tail-call 目标
-字体注入  → FontAssetManager.SetupBuiltinFontAsset  @ 0x61028AC   注入 CJK fallback
+字体替换  → FontAssetManager.SetupBuiltinFontAsset  @ 0x61028AC   简中主字体替换 EB/DB
 次级兜底  → TMP_Text.set_text                     @ 0xA8D1B98   替换 X1（所有 TMP 文本）
 ```
 
@@ -46,23 +46,35 @@ UI slot   → CustomTextMesh.SetText（ICustomText） @ 0x4F2B590   UpdateWordin
 | UI | `WordingManager.GetImpl` | 一次 Hook 覆盖大部分词表 lookup；`onLeave` 可替换返回值 | 实现体非 metadata 独立符号，偏移需 IDA 定位 | ✅ `WORD_DECIDE` 等可见 `[TEST]` |
 | UI | `SetWordingText` | 直接拿到词表 key | 不经过此处的不覆盖 | ✅ key 读取 |
 | 兜底 | `CustomTextMesh.SetText` / slot | 覆盖显示链路末端 | 调用频繁；slot 与 impl 需分清 | ✅ 有调用 |
-| 字体 | `SetupBuiltinFontAsset` | 在字体加载时注入 fallback | 需准备 CJK TMP_FontAsset | 未测 |
+| 字体 | `SetupBuiltinFontAsset` | 加载完成后替换主字体为简中 TMP | 需准备 SC `TMP_FontAsset`；材质需兼容 | 原型待改 |
 | 底层 | `TMP_Text.set_text` | 覆盖所有 TMP 文本 | 范围过宽；剧情初段计数为 0 | ⏳ 待主界面补测 |
 
 ## 结论
 
 - 静态 + 动态验证表明：**首选 Hook 点的 IDA 偏移在真机运行时正确**，可作为 Zygisk native Hook 的地址依据。
 - UI 拦截主点：**`WordingManager.GetImpl` `onLeave`**；辅以 `CustomTextMesh.SetText` / slot 与 `SetWordingText`（读 key）。剧情首选 `SetWordsInfo`。
-- 字体方案优先考虑向 `TMP_FontAsset.fallbackFontAssetTable` 注入含 CJK 字符的子集字体。
+- **初步汉化字体策略（2026-06-29 定案）**：**替换主字体**，不用「日文字体主 + fallback 补字」。
+- 理由：TMP 主字体有字形时不会走 fallback；日文字形与简中写法在大量统一码位上不同，fallback 只能消 tofu，无法保证简中字形一致。
+- 实现概要：`SetupBuiltinFontAsset` **onLeave** 将 `FontAssetManager+0x20`（EB）、`+0x38`（DB）指针换为 **思源黑体 SC** 子集（或国服 CN `TMP_FontAsset`）；原 EB/DB **降级**为新字体的 `fallbackFontAssetTable`（`[font+0x138]`），兜底未翻译日文、假名、日字特化字形。
+- 思源 SC 含假名与简中汉字（中国字形），不含日文汉字形；与「UI 国服词表 + 少量日文残留」搭配合理。详见 [text-rendering.md](./text-rendering.md) §初步汉化字体策略。
+- Frida `font_inject.js`：`FONT_MODE=replace` 替换 `+0x20`/`+0x38`；`dual` 仅加载 SC。
 
-### 字体注入挂点（2026-06-29 真机 font 探测）
+### 字体替换挂点（2026-06-29 真机 font 探测）
 
 | 时机 | 函数 | 动作 |
 |------|------|------|
-| ❌ 过早 | `ClearFallbackFontAsset` @ `0x61024F8` | 清空 List，勿在此后依赖旧 size |
-| ✅ 推荐 | `SetupBuiltinFontAsset` **onLeave** @ `0x61028AC` | 向 `baseA`/`baseB` 的 fallback List 追加 CN 字体 |
+| ❌ 过早 | `ClearFallbackFontAsset` @ `0x61024F8` | 清空 List；勿在 leave 前写入 |
+| ❌ 弃用（初版原型） | 同上 leave | 向 `baseA`/`baseB` 的 fallback List **追加** CJK 字体 — 仅补缺字，简中字形仍混日文 |
+| ✅ 推荐 | `SetupBuiltinFontAsset` **onLeave** @ `0x61028AC` | **替换** `+0x20` / `+0x38` 主字体为 SC `TMP_FontAsset`；原 EB/DB 挂入新字体 fallback |
 
-真机快照（6.5.5）：内置主字体名为 **`EB`**（`+0x20`）、**`DB`**（`+0x38`）；leave 后各 `fallbackSize=2`。国服应提供同名 `TMP_FontAsset`（CJK glyph），从 CN AssetBundle 提取后 `List.Add` 到 `[font+0x138]`。
+真机快照（6.5.5）：内置主字体名为 **`EB`**（`+0x20`）、**`DB`**（`+0x38`）；leave 后各 `fallbackSize=2`（游戏自建 fallback 链）。替换时须在 leave 之后操作，避免被 `ClearFallback` 流程覆盖。
+
+| 字体源 | 说明 |
+|--------|------|
+| 思源黑体 SC 子集 | `pjsk-i18n font-chars` → Unity 烘焙 `TMP_FontAsset`；字形可控 |
+| 国服 CN bundle | `sekai-assets-updater` `REGION=CN` 解同名 DB/EB；免烘焙，字形与国服一致 |
+
+**模式分岔**：`UI_MODE=cn` / `STORY_MODE=cn` 用全局替换；`STORY_MODE=dual` **不**替换主字体，改按 label 绑 SC（见 [dual-subtitle.md](./dual-subtitle.md) §6、[text-rendering.md](./text-rendering.md) §双语混排）。
 
 ---
 

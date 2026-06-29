@@ -43,7 +43,7 @@ uv run --project i18n-tools pjsk-i18n font-chars
 # 字体加载探测（冷启动触发 SetupBuiltinFontAsset）
 uv run python frida/run.py font --duration 180
 
-# 思源 fallback 注入（需 i18n/font/source-han-fallback.bundle）
+# 思源主字体替换（需 i18n/font/source-han-fallback.bundle）
 uv run python frida/run.py font --inject --duration 180
 uv run python frida/run.py intercept --font-inject --duration 120
 

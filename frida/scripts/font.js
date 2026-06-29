@@ -1,4 +1,4 @@
-// Font probe and/or Source Han fallback inject
+// Font probe and/or Source Han primary replacement
 'use strict';
 
 const CFG = Object.assign({
@@ -62,6 +62,7 @@ function install() {
     emit('ready', {
         mode: CFG.INJECT ? 'font-inject' : 'font',
         inject: CFG.INJECT,
+        fontMode: CFG.FONT_MODE || 'replace',
         stats: stats,
         managerFields: FONT_MANAGER_FIELDS,
         tmpFontFallbackOff: TMP_FONT_FALLBACK_LIST,

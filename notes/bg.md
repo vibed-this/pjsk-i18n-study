@@ -73,12 +73,15 @@ Hook 框架选择：推荐 **ShadowHook**（字节跳动开源，ARM64 友好）
 
 ### 3.4 中文字体注入
 
-游戏默认字体仅包含日文字符，直接替换文本会导致中文字符渲染为方块（豆腐字）。
+游戏默认字体（`EB`/`DB`）按日文设计；仅替换文本会导致简中缺字（tofu），且日文字形与简中写法在大量统一码位上不同。
 
-解决方案：
+**初步汉化定案（2026-06-29）**：**替换主字体**，不用 fallback 补字。
 
-- Hook Unity 字体加载流程，将游戏请求的字体资产替换为含 CJK 字符的字体（如思源黑体子集）
-- 或向 TMP 字体资产的 `fallbackFontAssetTable` 中动态插入中文字体，实现按需回退渲染
+- Hook `FontAssetManager.SetupBuiltinFontAsset` onLeave，将 `+0x20` / `+0x38` 换为 **思源黑体 SC** 子集或国服 CN `TMP_FontAsset`
+- 原 EB/DB 降级为新字体的 `fallbackFontAssetTable`，兜底未翻译日文与假名
+- 弃用「日文字体主 + fallback 追加」：只能消 tofu，无法保证简中字形一致
+
+详见 [text-rendering.md](./text-rendering.md) §初步汉化字体策略、[hook-strategy.md](./hook-strategy.md) §字体替换挂点。
 
 ### 3.5 服务端数据
 

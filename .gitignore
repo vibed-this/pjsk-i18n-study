@@ -76,6 +76,23 @@ i18n-data/font/*.otf
 i18n-data/font/*.ttf
 i18n/font/*.bundle
 
+# Unity font-bake project (generated)
+i18n-tools/font-bake-unity/*.csproj
+i18n-tools/font-bake-unity/*.sln
+i18n-tools/font-bake-unity/.vsconfig
+i18n-tools/font-bake-unity/Library/
+i18n-tools/font-bake-unity/Temp/
+i18n-tools/font-bake-unity/Logs/
+i18n-tools/font-bake-unity/UserSettings/
+i18n-tools/font-bake-unity/Build/
+i18n-tools/font-bake-unity/Assets/Generated/
+unity-example/PJSK-Bake-Font/Library/
+unity-example/PJSK-Bake-Font/Temp/
+unity-example/PJSK-Bake-Font/Logs/
+unity-example/PJSK-Bake-Font/UserSettings/
+unity-example/PJSK-Bake-Font/Build/
+unity-example/PJSK-Bake-Font/Assets/Generated/
+
 # =============================================================================
 # Python (for sssekai scripts / tooling)
 # =============================================================================

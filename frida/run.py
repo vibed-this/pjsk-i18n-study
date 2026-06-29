@@ -56,10 +56,11 @@ def load_story_text() -> dict[str, str] | None:
     return load_json_string_map(STORY_TEXT_PATH)
 
 
-def font_inject_cfg() -> dict:
+def font_inject_cfg(*, font_mode: str = "replace") -> dict:
     return {
         "FONT_BUNDLE_PATH": DEVICE_FONT_BUNDLE,
         "FONT_ASSET_NAME": FONT_ASSET_NAME,
+        "FONT_MODE": font_mode,
     }
 
 
@@ -115,7 +116,7 @@ def intercept_cfg(args: argparse.Namespace) -> dict:
             "FONT_INJECT": args.font_inject,
         }
         if args.font_inject:
-            cfg.update(font_inject_cfg())
+            cfg.update(font_inject_cfg(font_mode="dual"))
         return cfg
     ui_mode = "cn" if load_ui_wordings() else "prefix"
     story_mode = "cn" if load_story_text() else "prefix"
@@ -123,7 +124,7 @@ def intercept_cfg(args: argparse.Namespace) -> dict:
     if ui_mode == "prefix" or story_mode == "prefix":
         cfg["PREFIX"] = args.prefix
     if args.font_inject:
-        cfg.update(font_inject_cfg())
+        cfg.update(font_inject_cfg(font_mode="replace"))
     return cfg
 
 
@@ -205,8 +206,12 @@ def run_intercept(args: argparse.Namespace) -> int:
             stats.append(p)
             print(f"[stats] {p.get('stats')}", flush=True)
         elif ev == "ready":
+            font_bits = ""
+            if p.get("fontInject"):
+                font_bits = f" fontMode={p.get('fontMode')!r}"
             print(
-                f"[*] ready storyMode={p.get('storyMode')!r} uiMode={p.get('uiMode')!r} "
+                f"[*] ready storyMode={p.get('storyMode')!r} uiMode={p.get('uiMode')!r}"
+                f"{font_bits} "
                 f"uiWordings={p.get('uiWordings')} uiPlainText={p.get('uiPlainText')} "
                 f"storyText={p.get('storyText')} "
                 f"demoKeys={p.get('demoKeys')}",
@@ -290,28 +295,63 @@ def fmt_font(p: dict) -> str:
 
 def fmt_font_inject(p: dict) -> str:
     mark = "OK" if p.get("ok") else "FAIL"
-    lines = [f"── font_inject [{mark}]"]
+    mode = p.get("mode", "?")
+    lines = [f"── font_inject [{mark}] mode={mode}"]
     if p.get("skipped"):
         lines.append(f"   skipped: {p.get('reason')}")
+    if p.get("skippedReplace"):
+        lines.append("   replace: skipped (dual/load — SC loaded only)")
     if p.get("error"):
         lines.append(f"   error: {p['error']}")
     if p.get("reason") and not p.get("ok"):
         lines.append(f"   reason: {p['reason']}")
-    fb = p.get("fallback")
-    if fb:
-        lines.append(f"   fallback: {fb.get('ptr')} name={fb.get('name')!r}")
+    if p.get("fallbackWarn"):
+        lines.append("   warn: EB/DB demote to SC fallback partially failed")
+    sc = p.get("scFont")
+    if sc:
+        fb = sc.get("fallback") or {}
+        lines.append(
+            f"   scFont: {sc.get('ptr')} name={sc.get('name')!r} "
+            f"fallbackSize={fb.get('size', 0)}"
+        )
     for label, row in (p.get("results") or {}).items():
+        if not isinstance(row, dict):
+            continue
+        if row.get("replaced"):
+            lines.append(
+                f"   {label}: {row.get('originalName')!r} → {row.get('primaryName')!r} OK"
+            )
+        elif row.get("ok"):
+            lines.append(f"   {label}: original={row.get('originalName')!r}")
+        else:
+            lines.append(f"   {label}: FAIL reason={row.get('reason')}")
+    for row in p.get("fallbackDemote") or []:
         if not isinstance(row, dict):
             continue
         extra = ""
         if row.get("sizeAfter") is not None:
-            extra = f" size {row.get('sizeBefore')}→{row.get('sizeAfter')}"
-        lines.append(f"   {label}({row.get('baseName')!r}): {'OK' if row.get('ok') else 'FAIL'}{extra}")
+            extra = f" fb {row.get('sizeBefore')}→{row.get('sizeAfter')}"
+        lines.append(
+            f"   demote {row.get('name')!r}: {'OK' if row.get('ok') else row.get('reason')}{extra}"
+        )
+    after = p.get("after")
+    if after and after.get("slots"):
+        for label in ("baseA", "baseB"):
+            info = after["slots"].get(label)
+            if not info:
+                continue
+            fb = info.get("fallback") or {}
+            lines.append(
+                f"   after.{label}: name={info.get('name')!r} fallbackSize={fb.get('size', 0)}"
+            )
     return "\n".join(lines)
 
 
 def run_font(args: argparse.Namespace) -> int:
-    cfg = {"INJECT": args.inject, **(font_inject_cfg() if args.inject else {})}
+    cfg = {
+        "INJECT": args.inject,
+        **(font_inject_cfg(font_mode=args.font_mode) if args.inject else {}),
+    }
     extra_libs = FONT_EXTRA_LIBS if args.inject else None
     if args.inject:
         push_font_bundle()
@@ -334,8 +374,8 @@ def run_font(args: argparse.Namespace) -> int:
 
     print("=" * 60, flush=True)
     if args.inject:
-        print("思源 fallback 注入 — SetupBuiltinFontAsset onLeave", flush=True)
-        print(f"bundle: {DEVICE_FONT_BUNDLE}", flush=True)
+        print("思源主字体替换 — SetupBuiltinFontAsset onLeave", flush=True)
+        print(f"mode: {args.font_mode}  bundle: {DEVICE_FONT_BUNDLE}", flush=True)
     else:
         print("字体探测 — SetupBuiltinFontAsset / ClearFallbackFontAsset", flush=True)
         print("冷启动或重进游戏以触发字体加载；leave 后看 fallbackSize", flush=True)
@@ -480,12 +520,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--inject",
         action="store_true",
-        help="font mode: inject Source Han TMP fallback (requires bundle)",
+        help="font mode: replace EB/DB with Source Han SC (requires bundle)",
+    )
+    parser.add_argument(
+        "--font-mode",
+        choices=("replace", "dual", "load"),
+        default="replace",
+        help="font --inject: replace=swap primary; dual/load=only load SC asset",
     )
     parser.add_argument(
         "--font-inject",
         action="store_true",
-        help="intercept mode: also inject Source Han TMP fallback",
+        help="intercept mode: also replace primary font (dual story → FONT_MODE=dual)",
     )
     return parser
 
