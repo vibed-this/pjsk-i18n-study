@@ -132,6 +132,78 @@
 
 详见 [ida-verification.md](./ida-verification.md) §剧情运行时 ID、[hook-strategy.md](./hook-strategy.md) §剧情运行时上下文。
 
+### 6.6.0 baseline 运行时入口（2026-06-29）
+
+## 分析目标
+
+确认 6.6.0 UI 词表链实际调用的 RVA（impl vs methodPointer），解释 `intercept` stats 全 0。
+
+## 手段
+
+- `frida/run.py baseline`（`scripts/baseline.js`）：il2cpp 字符串 API smoke + 14 候选 `Interceptor.attach` 命中计数
+- 真机 6.6.0 gadget；操作主界面按钮 / 剧情跳过 dialog
+
+## 过程
+
+1. `il2cpp_string_*` roundtrip **ok**。
+2. 有 UI 交互后命中增长：
+
+| id | RVA | hit |
+|----|-----|-----|
+| `Get_runtime` | `0x602B9FC` | ✅ `WORD_CANCEL` 等 |
+| `SWT_runtime` | `0x4F2E9EC` | ✅ |
+| `UWT_runtime` | `0x4F2E8D0` | ✅ |
+| `GetImpl` | `0x60282AC` | ❌ 0 |
+| `Get_wrapper` | `0x602B8C0` | ❌ 0 |
+| `SWT_impl` / `UWT_impl` | `0x4F2B408` / `0x4F2B2EC` | ❌ 0 |
+
+3. `offsets.js` / `intercept.js` 已改 Hook 到 **runtime 列**；`GetImpl` 等保留作诊断。
+
+## 结论
+
+| 项 | 结论 |
+|----|------|
+| 根因 | 6.6.0 热路径走 **Il2CppDumper / methodPointer**，非 6.5.5 的 impl 入口 |
+| 命令 | `uv run python frida/run.py baseline --duration 60` |
+| E2E（冷启动后） | `intercept` @ `0x602B9FC`：`wordingGet=6`、`intercept 6/6 ok`；`onLeave` 前缀替换可用 ✅ |
+| baseline（主界面） | `Get_runtime=10`、`UWT_runtime=10`；`GetImpl` attach 偶发 fail（非生产 Hook） |
+| 待补测 | 进主菜单后 `WORD_DECIDE` 等 dialog；`uiKey` / `SWT_runtime` 计数 |
+
+---
+
+### 6.6.0 `probe` vs `intercept` attach 差异（2026-06-29）
+
+## 分析目标
+
+解释 6.6.0 真机 `probe` 17/17 通过但首次 `intercept` 在 `GetImpl` 报 `unable to intercept function`。
+
+## 手段
+
+- 新增 `frida/run.py attach-probe`（`scripts/attach_probe.js`）：逐偏移 `Interceptor.attach`，含 `onLeave` 与 intercept 安装顺序复现
+- 冷启动 `am force-stop` 后重跑 `intercept`；对比 on-disk `il2cpp.so` 入口字节
+
+## 过程
+
+1. **GetImpl Hook 逻辑未改**：`intercept.js` 仍 `hookAt('WordingManager.Get', OFFSETS.WordingManager_GetImpl, { onEnter, onLeave })`；偏移 `0x60282AC` 与 6.5.5 相同。
+2. **`attach-probe`（游戏已运行）**：`GetImpl` / `GetFormat` / intercept 全顺序 **attach 均 OK**；`onEnter+onLeave` 亦 OK。
+3. **冷启动后 `intercept`**：base 变化（ASLR），**全部 Hook 安装成功**，无复现首次错误。
+4. **入口字节对比**：
+   - on-disk `il2cpp.so` @ `0x60282AC`：`fd 7b bf a9 …`（IDA 序言 `STR X30,[SP,#-0x10]!`）
+   - Hook 已安装后运行时：`31 a7 a0 97 …`（Frida trampoline `BL`）；页保护由 `r-x` 变为 **`rwx`**
+5. 首次失败后会留下**部分 Hook**（`install()` 在 `GetImpl` 前已成功挂 5 个）；`session.detach()` 应恢复，但若异常断开可能需 **冷启动游戏** 再连。
+
+## 结论
+
+| 项 | 结论 |
+|----|------|
+| 根因 | **非偏移/逻辑错误**；更像 Frida **瞬时 attach 失败** 或异常断连后的**残留 trampoline 状态** |
+| `probe` 局限 | 只查 `r-x` 映射，**不**验证 `Interceptor.attach` |
+| 缓解（可选） | `hookAt` 重试已移除以便复测；若仍偶发失败则冷启动游戏 |
+| 诊断命令 | `uv run python frida/run.py attach-probe` |
+| 恢复步骤 | attach 失败 → `am force-stop` 冷启动 → 重连 `intercept` |
+
+---
+
 ### 6. intercept UI 词表验证（2026-06-28，base=`0x7530bb4000`）
 
 脚本：`frida/run.py intercept`。UI 路径 Hook：
@@ -220,9 +292,10 @@ frida/
 
 #### 手段
 
-- Hook：`ScenarioPlayer.AttachSceneData` @ `0x624C100`（IDA 见 [ida-verification.md](./ida-verification.md) §剧情 bundle 载入链）
+- Hook：`ScenarioPlayer.AttachSceneData` @ **`0x624F8B8`**（6.6.0 methodPointer；6.5.5 IDA `0x624C100`）
 - 数据：`i18n/story/text.json`（114,859 条 jp→zh，由 `run.py` 注入为 `STORY_TEXT`）
 - 结构：`enumerateScenarioTalkLines`（`runtime.js`）与 `story-build` 行序一致
+- 诊断：`story_patch_diag`（scene 指针、`scenarioId`、snippets/talk 数组长度）
 
 #### 过程
 
@@ -234,34 +307,47 @@ frida/
 | `STORY_SET_WORDS_FALLBACK` | `false`（不 Hook SetWordsInfo 替换） | `true`（仍走 SetWordsInfo 双字幕） |
 | 动作 | patch `talk+0x18` / `+0x20` | 仅 JP 备份到 `STORY_JP_BACKUP` |
 
-**真机命令**（维护结束后）：
+**真机命令**（须冷启动，见 §6.6.0 baseline）：
 
 ```powershell
-uv run python frida/run.py intercept --duration 180
+adb shell am force-stop com.sega.pjsekai
+adb shell monkey -p com.sega.pjsekai -c android.intent.category.LAUNCHER 1
+uv run python frida/run.py intercept --ui-mode cn --story-mode cn --duration 300
 ```
 
-**预期终端输出**：
+**成功判据**：
 
-- `ready` 含 `storyPatch=AttachSceneData`
-- 进活动剧情后：`story_patch_summary`（`scenarioId`、`lines`、`patched`）
-- 抽样：`story_patch` 行（JP/ZH 对照）
-- `stats`：`storyPatchAttach`、`storyPatchHits`
+| 终端 | 含义 |
+|------|------|
+| `story_patch_diag` … `id='event_story_…'` `snippets=N` `talk=M` | `args[1]` 为有效 `ScenarioSceneData` |
+| `story_patch_summary` … `lines=N` **`patched>0`** | 数据源 patch 命中 |
+| `story_patch` JP/ZH 对照行 | 抽样替换内容 |
+| `stats.story` **= 0** | 正常（cn 不走 `SetWordsInfo`） |
+| 屏幕对话简中 | 端到端成功 |
 
-**可选**：`--story-mode dual` 验证 JP 备份 + SetWordsInfo 双字幕并存。
+**失败判据**：
+
+| 终端 | 含义 |
+|------|------|
+| `story_patch_summary None lines=0 patched=0` | Hook 地址错或 `args[1]` 非 scene（曾误挂 `0x624F814`） |
+| `lines>0 patched=0` | Hook 对但 `text.json` 未覆盖该场景 |
+
+**可选**：`--story-fallback`（cn 时额外 `SetWordsInfo` jp→zh）；`--story-mode dual`（JP 备份 + 双字幕）。
 
 #### 结论
 
 | 项 | 状态 |
 |----|------|
-| 代码原型 | ✅ `story_patch.js` + `offsets.js` 已接入 `intercept` |
-| 真机 E2E | ⏳ **待测**（维护中无法进剧情） |
-| 后续 | 接入 `by-scenario` 按行查表；`OnFinishLoadScenario` 备选 Hook |
+| 代码原型 | ✅ `story_patch.js` + `offsets.js` |
+| 6.6.0 地址 | ✅ **`0x624F8B8`**（非误标 `0x624F814`，见 [il2cpp-hook-resolution.md](./il2cpp-hook-resolution.md)） |
+| 真机 E2E | ✅ `STORY_MODE=cn`：patch + 屏幕简中 |
+| 后续 | `by-scenario` 按行查表；`OnFinishLoadScenario` `0x63E7238` 备选 |
 
 ### 待验证项
 
 - [x] 剧情 `TalkWindow.SetWordsInfo` 调用与文本读取
-- [x] `intercept` 剧情替换游戏内可见（SetWordsInfo 路径）
-- [ ] **`AttachSceneData` patch E2E**：`story_patch_summary` + 游戏内简中（维护后）
+- [x] `intercept` 剧情替换游戏内可见（SetWordsInfo 路径，prefix）
+- [x] **`AttachSceneData` patch E2E**：`story_patch_summary` `patched>0` + 游戏内简中（6.6.0）
 - [x] `FontAssetManager.SetupBuiltinFontAsset` 调用时机与 fallback 表
 - [x] 主界面 / UI 词表 `intercept` 简中命中（字体 tofu 待 P5）
 - [ ] 主字体替换（思源 SC / 国服 CN）后 `UI_MODE=cn` 无 tofu、字形一致

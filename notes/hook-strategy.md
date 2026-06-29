@@ -23,11 +23,13 @@
 
 ## 推荐 Hook 点（按优先级）
 
-偏移来源：`frida/lib/offsets.js`（**IDA 函数入口 RVA**，见 [ida-verification.md](./ida-verification.md)）。真机地址 = `libil2cpp.so.base + RVA`（ASLR 只影响 base，不影响 RVA）。
+偏移来源：`frida/lib/offsets.js`（见 [ida-verification.md](./ida-verification.md)、[il2cpp-hook-resolution.md](./il2cpp-hook-resolution.md)）。**6.5.5** 以 IDA 实现体为准；**6.6.0** 生产 Hook 以 **methodPointer（Dumper）** 为准。
 
 ```
-剧情文本  → TalkWindow.SetWordsInfo              @ 0x6264FD8   替换 X2（角色名）/ X3（正文）
-UI 词表   → WordingManager.Get 实现体（GetImpl）  @ 0x60282AC   onLeave 替换返回值 ✅
+剧情文本  → TalkWindow.SetWordsInfo              @ 0x6264FD8（6.5.5）  替换 X2/X3；cn 量产改走 AttachSceneData patch
+剧情载入  → ScenarioPlayer.AttachSceneData       @ 0x624F8B8（6.6.0）  onEnter patch TalkData（cn 量产）
+UI 词表   → WordingManager.Get                   @ 0x602B9FC（6.6.0）  onLeave 替换返回值 ✅
+UI 词表   → WordingManager.GetImpl               @ 0x60282AC（6.5.5）  onLeave 替换返回值 ✅
 UI 格式   → WordingManager.GetFormat              @ 0x602F054   带占位符文案
 UI key    → CustomTextMesh.SetWordingText         @ 0x4F2B408   onEnter 读 key
 UI 显示   → CustomTextMesh.SetText                @ 0x4F27530   替换 X1（显示前兜底）
@@ -53,7 +55,7 @@ UI slot   → CustomTextMesh.SetText（ICustomText） @ 0x4F2B590   UpdateWordin
 ## 结论
 
 - 静态 + 动态验证表明：**首选 Hook 点的 IDA 偏移在真机运行时正确**，可作为 Zygisk native Hook 的地址依据。
-- UI **量产**（已定）：**`WordingManager.GetImpl` `onLeave`** + `wordings.json` 查表；有 `wordingKey`，**不必**改 `AddMasterWording` 数据源（见 [text-rendering.md](./text-rendering.md) §6、[ida-verification.md](./ida-verification.md) §UI 词表加载链）。
+- UI **量产**（已定）：**`WordingManager.Get` `onLeave`**（6.6.0 `0x602B9FC`；6.5.5 `GetImpl` `0x60282AC`）+ `wordings.json` 查表；有 `wordingKey`，**不必**改 `AddMasterWording` 数据源（见 [text-rendering.md](./text-rendering.md) §6、[il2cpp-hook-resolution.md](./il2cpp-hook-resolution.md)）。
 - UI **兜底**：`CustomTextMesh.SetText` / slot（Master 明文）；`SetWordingText`（读 key 诊断）。
 - 剧情 **当前焦点**：scenario **bundle 载入层** patch / JP 备份（见 §剧情数据源 patch）；`SetWordsInfo` 作过渡或兜底。
 - **初步汉化字体策略（2026-06-29 定案）**：**替换主字体**，不用「日文字体主 + fallback 补字」。
@@ -194,11 +196,12 @@ scenario bundle load → ScenarioSceneData 进内存
 | 问题 | 结论 |
 |------|------|
 | IDA（6.5.5） | 载入链 + 布局已验证，见 [ida-verification.md](./ida-verification.md) §剧情 bundle 载入链 |
-| 首选 Hook | **`ScenarioPlayer.AttachSceneData` `0x624C100` `onEnter`**（`X1`=`ScenarioSceneData*`） |
-| 备选 Hook | `ScreenLayerScenario.OnFinishLoadScenario` `0x63E1F80`（`BundleElement+0x20`） |
+| 首选 Hook | **6.5.5** `0x624C100`；**6.6.0** **`0x624F8B8`** `onEnter`（`X1`=`ScenarioSceneData*`；见 [il2cpp-hook-resolution.md](./il2cpp-hook-resolution.md)） |
+| 备选 Hook | **6.6.0** `OnFinishLoadScenario` `0x63E7238`（`BundleElement+0x20`） |
 | 运行时类型 | JSON `TalkData` = **`ScenarioSnippetTalk[]`** @ `scene+0x60`；正文 `+0x20`，显示名 `+0x18` |
 | Frida 原型 | ✅ `story_patch.js` @ `AttachSceneData`（cn patch + dual JP 备份） |
-| 下一步 | 真机 `STORY_MODE=cn` E2E（维护后）；可选 `by-scenario` 按行表 |
+| 下一步 | 可选 `by-scenario` 按行表；`ScenarioJumper` 书签路径 |
+| 真机 E2E | ✅ 6.6.0 `STORY_MODE=cn` @ `0x624F8B8`（[frida.md](./frida.md) §8） |
 | 双语 | 备份 JP + 双 label；**不能**仅靠把 Body 改成纯中文 |
 | UI | **不同线**；继续 `Get` 查表 |
 
@@ -226,19 +229,16 @@ scenario bundle load → ScenarioSceneData 进内存
 | 类/方法重命名或删除 | ✅ 是 | 运行时解析亦失败 |
 | ASLR | ❌ 否 | 已由 `base + RVA` 处理 |
 
-**更新流程**（对应 [TODO.md](../TODO.md) P6）：
+**更新流程**：见 **[version-migration-sop.md](./version-migration-sop.md)**（6.6.0 真机 SOP；含 `baseline` 命中裁决、剧情 `AttachSceneData` 误挂案例）。摘要：
 
 ```
-新版本 APK
-  → metadata 解密（格式变则先处理）
-  → Il2CppDumper → script.json
-  → IDA 核对函数入口（Hook 以 IDA 为准）
-  → 更新 frida/lib/offsets.js（注明 versionName）
-  → uv run python frida/run.py probe
-  → intercept / monitor 真机 E2E
+新版本 APK → Il2CppDumper → lookup_offsets.py
+  → offsets.js（生产 Hook = baseline 有 hit 的 methodPointer）
+  → gadget 重打 → probe → baseline → intercept prefix/cn E2E
+  → 笔记 + TODO
 ```
 
-Zygisk 阶段建议：`versionName → offsets` 映射表；特征码扫描为可选增强（未实施）。
+6.6.0 起 **不可仅用 IDA 入口** 代替 Dumper `Address`；`probe` 不够。Zygisk 阶段建议：`versionName → offsets` 映射表。
 
 ---
 

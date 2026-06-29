@@ -18,13 +18,15 @@
 1. 输入文件：
    - `dump/il2cpp/il2cpp.so`
    - `dump/il2cpp/global-metadata.dat`
-2. Il2CppDumper 初始化信息：
-   - Metadata Version: **31**
-   - Il2Cpp Version: **31**
-   - CodeRegistration: `0xACDB068`
-   - MetadataRegistration: `0xB15A060`
+2. Il2CppDumper 初始化信息（按游戏版本）：
+
+| 版本 | Metadata / Il2Cpp | CodeRegistration | MetadataRegistration |
+|------|-------------------|------------------|----------------------|
+| 6.5.5（基线） | 31 / 31 | `0xACDB068` | `0xB15A060` |
+| **6.6.0**（当前 `apk/`） | 31 / 31 | **`0xACEBF10`** | **`0xB16B538`** |
+
 3. 警告：`ERROR: This file may be protected`（指 `libil2cpp.so` 存在一定保护），但 dump 仍正常完成。
-4. 产物输出至 `tools/Il2CppDumper/`（后续应整理到 `dump/il2cpp-dumper/`）。
+4. 产物输出至 `tools/Il2CppDumper/`（当前为 **6.6.0** dump；6.5.5 产物未单独归档）。
 
 ## 结论
 

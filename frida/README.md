@@ -54,8 +54,20 @@ uv run python frida/run.py probe
 uv run --project i18n-tools pjsk-i18n build
 uv run python frida/run.py intercept
 
-# 自定义前缀
-uv run python frida/run.py intercept --prefix "[CN] " --duration 120
+# 强制前缀（验证 Hook，不查国服词表）
+uv run python frida/run.py intercept --ui-mode prefix --story-mode prefix --duration 120
+
+# 仅 UI 前缀，剧情仍 cn + AttachSceneData patch
+uv run python frida/run.py intercept --ui-mode prefix --story-mode cn --duration 120
+
+# 自定义前缀文本
+uv run python frida/run.py intercept --ui-mode prefix --story-mode prefix --prefix "[CN] " --duration 120
+
+# 默认 auto：有 wordings.json / text.json 时分别为 uiMode=cn / storyMode=cn
+uv run python frida/run.py intercept --ui-mode cn --story-mode cn --duration 300
+
+# 剧情 patch 失败时兜底（SetWordsInfo jp→zh）
+uv run python frida/run.py intercept --ui-mode cn --story-mode cn --story-fallback --duration 300
 ```
 
 ## 模式

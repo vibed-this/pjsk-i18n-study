@@ -166,9 +166,9 @@ scenario bundle load → ScenarioSceneData 进内存
 | 离线表是否就绪？ | **是**；`story-build` 已产出 114,859 条 |
 | IDA 载入链（6.5.5） | `LoadScenarioSceneDataAsync` → `OnFinishLoadScenario` → **`AttachSceneData`**；详见 [ida-verification.md](./ida-verification.md) §剧情 bundle 载入链 |
 | 运行时 `TalkData` | 实为 **`ScenarioSnippetTalk`**：`+0x18` 显示名、`+0x20` 正文；数组在 `ScenarioSceneData+0x60` |
-| Hook 候选 | **P0** `AttachSceneData` @ `0x624C100`；P1 `OnFinishLoadScenario` @ `0x63E1F80` |
-| 当前 Frida | **`story_patch.js`** @ `AttachSceneData`（cn patch）；`SetWordsInfo` 作 dual/兜底 |
-| 下一步 | 真机 `STORY_MODE=cn` E2E（维护后，见 [frida.md](./frida.md) §8） |
+| Hook 候选 | **6.5.5** `0x624C100`；**6.6.0** **`0x624F8B8`**；P1 `OnFinishLoadScenario` `0x63E7238` |
+| 当前 Frida | **`story_patch.js`** @ `0x624F8B8`（cn patch）；`SetWordsInfo` 作 dual/`--story-fallback` |
+| 真机 E2E | ✅ 6.6.0 `STORY_MODE=cn`（见 [frida.md](./frida.md) §8） |
 
 ## 结论
 
@@ -194,7 +194,7 @@ scenario bundle load → ScenarioSceneData 进内存
 ### 待办
 
 - [x] **bundle 载入 Hook 原型**：`story_patch.js` @ `AttachSceneData`（§运行时注入）
-- [ ] 真机 `STORY_MODE=cn` E2E（114k 条表 + 活动剧情抽样；维护后）
+- [x] 真机 `STORY_MODE=cn` E2E（6.6.0；`AttachSceneData` `0x624F8B8`，活动剧情抽样）
 - [ ] 卡片剧情：`character/member/`（及 unitstory / actionset）按同路径扩展 filter
 - [ ] 行数不一致的 3 个 scenario：人工核对或 fallback 策略
 - [ ] `SnippetActionTalk` ctx 探测（过渡/兜底，见 [ida-verification.md](./ida-verification.md)、[hook-strategy.md](./hook-strategy.md) §剧情运行时上下文）

@@ -137,6 +137,39 @@ Zygisk 若采用运行时 `il2cpp_*` 解析，须与 [hook-strategy.md](./hook-s
 
 ---
 
+## 6.6.0 全表迁移（2026-06-29）
+
+### 分析目标
+
+游戏 **6.6.0**（`apk/base.apk` `versionName=6.6.0`）更新后，用 IDA MCP 复核 `frida/lib/offsets.js` 全部 Hook 入口，重点确认 `WordingManager.GetImpl` 是否仍可用。
+
+### 手段
+
+- Il2CppDumper `script.json`（6.6.0 dump 已覆盖 `tools/Il2CppDumper/`）
+- IDA Pro MCP：`lookup_funcs`、`disasm`、`analyze_function`、`py_eval`（xref → `0x60282AC`）
+- 对照脚本：`tools/lookup_offsets.py`
+
+### 过程
+
+1. `server_health`：IDA 已加载 `apk/.../libil2cpp.so.i64`，`auto_analysis_ready: true`。
+2. **`sub_60282AC`**：反编译为 `dictionary.TryGetValue(key)` 模式（`sub_72875F0`），大量 code xref；**RVA 与 6.5.5 相同**。
+3. **包装器**：Dumper `Get` @ `0x602B9FC` 仅为 0x24 桩；真实包装器 **`sub_602B8C0`** → `sub_6456760` → **`BR X4`**。`+0x4000` 候选 `0x602F9FC` 落在 `sub_602F778`，非查表实现。
+4. **slot 稳定性**：`CustomTextMesh` / `CustomText` 的 `SetText` slot（`0x4F2B590` / `0x4F2B1B4`）RVA **未变**；`sub_4F2B2EC` 仍含 `BL sub_60282AC` + `BR X3`（vtable `+0x558`）。
+5. 剧情 / 字体 / TMP 等偏移整体 **`+0x3698`~`+0x51F0`** 区间漂移，详见 [il2cpp-hook-resolution.md](./il2cpp-hook-resolution.md) §6.6.0 表。
+
+### 结论
+
+| 项 | 结论 |
+|----|------|
+| `GetImpl`（静态） | ✅ 仍为 **`0x60282AC`**（查表逻辑未迁） |
+| **UI Hook（6.6.0）** | ✅ baseline + E2E：runtime **`0x602B9FC`** / `SWT` `0x4F2E9EC` / `UWT` `0x4F2E8D0`；impl **0 hit** |
+| **`AttachSceneData`（6.6.0）** | ✅ Hook **`0x624F8B8`**（Dumper）；~~`0x624F814`~~ 为误标（Capstone 证实非本方法） |
+| `offsets.js` | ✅ runtime + `_impl` / `_body` 诊断列 |
+| Frida E2E | ✅ UI prefix/cn + 剧情 `story_patch`（见 [frida.md](./frida.md)） |
+| 运行时字段 | `ScenarioSceneData` / `ScenarioSnippetTalk` 布局与 6.5.5 一致，`story_patch.js` 字段偏移不用改 |
+
+---
+
 ## 剧情运行时 ID（2026-06-29）
 
 ### 分析目标
@@ -462,11 +495,11 @@ for (const snip of sortedSnippets(snippets)) {
 |------|------|
 | `TalkData` 运行时类型？ | **`ScenarioSnippetTalk`**；`ScenarioSceneData+0x60` |
 | 正文字段偏移？ | **`+0x20` `Body`**；显示名 **`+0x18`**（Capstone + dump.cs 一致） |
-| 首选 Hook？ | **`ScenarioPlayer.AttachSceneData` `0x624C100` `onEnter`** |
-| 备选 Hook？ | `OnFinishLoadScenario` `0x63E1F80`（更早，改 `scenarioDatas` 缓存） |
+| 首选 Hook？ | **6.5.5** `0x624C100`；**6.6.0** **`0x624F8B8`**（methodPointer，勿用误标 `0x624F814`） |
+| 备选 Hook？ | **6.5.5** `0x63E1F80`；**6.6.0** `0x63E7238` `OnFinishLoadScenario` |
 | 行序对齐？ | 遍历 `Snippets` 中 `Action==Talk`（按 `Index` 排序），**非**裸 `TalkData[]` 下标 |
-| Frida 原型 | ✅ `frida/lib/story_patch.js` @ `0x624C100`（见 [frida.md](./frida.md) §8） |
-| 下一步 | 真机 E2E（维护后）；备选 `OnFinishLoadScenario` `0x63E1F80` |
+| Frida 原型 | ✅ `story_patch.js` @ **`0x624F8B8`**（6.6.0 E2E，见 [frida.md](./frida.md) §8） |
+| 下一步 | `by-scenario` 按行表；`OnFinishLoadScenario` 备选 |
 
 实现策略见 [hook-strategy.md](./hook-strategy.md) §剧情数据源 patch、[story-pipeline.md](./story-pipeline.md) §运行时注入。
 

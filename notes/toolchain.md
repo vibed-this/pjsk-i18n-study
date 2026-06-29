@@ -42,7 +42,7 @@ APK 解包 → sssekai 解密 metadata → Il2CppDumper → IDA 验证 Hook 点 
 | Hex-Rays | 不可用，仅反汇编分析 |
 | Il2CppDumper 符号批量导入 IDA | `ida_py3.py` 需交互选文件，未执行 |
 | Frida 动态验证（模拟器） | frida-server + ARM 转译不稳定，spawn 后未见 il2cpp 加载 |
-| 游戏版本号（本地 APK） | 本地 `apk/` 对应 versionName **待确认**；设备曾装 6.5.5 |
+| 游戏版本号（本地 APK） | 本地 `apk/base.apk` **6.6.0**（`versionCode=300118`）；设备可能仍装 6.5.5 gadget |
 | gakuen-imas-localify 源码 | Zygisk 模块参考，未克隆 |
 | 文本内容动态抓取 | Hook 计数 OK，字符串读取脚本待改进 |
 
@@ -55,7 +55,7 @@ APK 解包 → sssekai 解密 metadata → Il2CppDumper → IDA 验证 Hook 点 
 | 项 | 值 / 说明 |
 |----|-----------|
 | Hook RVA 配置 | `frida/lib/offsets.js`（IDA 入口，非运行时 base） |
-| 当前分析版本 | 真机曾装 **6.5.5**；本地 `apk/` versionName **待确认** |
+| 当前分析版本 | 本地静态分析 **6.6.0**；真机 gadget 可能仍为 **6.5.5**（需重打补丁） |
 | 版本不一致风险 | 设备 APK ≠ 本地分析 so → Hook 可能装得上但行为错误；见 `frida/gadget/README.md` |
 | 更新后流程 | Il2CppDumper → IDA → 更新 `offsets.js` → `probe` + E2E（详见 [hook-strategy.md](./hook-strategy.md) §版本更新） |
 

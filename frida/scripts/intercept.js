@@ -312,7 +312,7 @@ function install() {
                 prefixEnterArg(args, 1, 'CustomText.SetText(slot)', () => { stats.uiSetText++; });
             },
         });
-        hookAt('WordingManager.Get', OFFSETS.WordingManager_GetImpl, {
+        hookAt('WordingManager.Get', OFFSETS.WordingManager_Get, {
             onEnter(args) {
                 this.key = readStr(args[0]);
             },
@@ -361,6 +361,13 @@ function install() {
         storyPatchAttach: CFG.STORY_PATCH_ATTACH,
         storySetWordsFallback: CFG.STORY_SET_WORDS_FALLBACK,
         uiMode: CFG.UI_MODE,
+        offsets: {
+            Get: OFFSETS.WordingManager_Get,
+            GetImpl: OFFSETS.WordingManager_GetImpl,
+            SetWordingText: OFFSETS.CustomTextMesh_SetWordingText,
+            UpdateWordingText: OFFSETS.CustomTextMesh_UpdateWordingText,
+            SetText: OFFSETS.CustomTextMesh_SetText,
+        },
         fontInject: CFG.FONT_INJECT,
         fontMode: CFG.FONT_MODE || 'replace',
         dualStyle: CFG.DUAL_STYLE,

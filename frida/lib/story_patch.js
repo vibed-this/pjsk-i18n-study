@@ -106,6 +106,16 @@ function installStoryAttachHook(stats, cfg) {
         onEnter(args) {
             stats.storyPatchAttach++;
             const scene = args[1];
+            if (stats.storyPatchLog < cfg.MAX_LOG) {
+                const diag = { player: args[0] ? args[0].toString() : null, scene: scene ? scene.toString() : null };
+                if (scene && !scene.isNull()) {
+                    diag.objName = readUnityObjectName(scene);
+                    diag.scenarioIdPeek = readStr(readPtr(scene, SCENARIO_SCENE_ID));
+                    diag.snippetsLen = readIl2CppArrayLength(readPtr(scene, SCENARIO_SCENE_SNIPPETS));
+                    diag.talkLen = readIl2CppArrayLength(readPtr(scene, SCENARIO_SCENE_TALK_DATA));
+                }
+                emit('story_patch_diag', diag);
+            }
             const result = patchScenarioSceneData(scene, stats, cfg);
             stats.storyPatchLines += result.lines || 0;
             stats.storyPatchHits += result.patched || 0;
