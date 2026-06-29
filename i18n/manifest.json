@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-06-28T15:57:26+00:00",
+  "built_at": "2026-06-28T16:10:11+00:00",
   "locale": "zh-Hans",
   "target_client": "jp",
   "sources": {
@@ -22,7 +22,7 @@
   "notes": "Runtime: wordingKey→zh (Get); jp plaintext→zh (SetText); story jp→zh (SetWordsInfo)",
   "story": {
     "demo": true,
-    "built_at": "2026-06-28T16:08:53+00:00",
+    "built_at": "2026-06-28T16:10:11+00:00",
     "stats": {
       "scenarios_processed": 1,
       "scenarios_aligned": 1,
